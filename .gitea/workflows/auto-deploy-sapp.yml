@@ -1,0 +1,115 @@
+# ============================================================
+# Gitea Actions Workflow: Auto Deploy SAPP
+# ============================================================
+# Se ejecuta automaticamente al hacer push a ramas sapp-dev y sapp-uat.
+# NOTA: sapp-prd esta EXCLUIDA. El deploy a produccion se hace manualmente
+# por seguridad y requiere aprobacion del equipo.
+# ============================================================
+
+name: Auto Deploy SAPP
+
+on:
+  push:
+    branches:
+      - sapp-dev
+      - sapp-uat
+      # sapp-prd EXCLUIDA - deploy manual por seguridad
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout codigo
+        uses: actions/checkout@v4
+
+      - name: Extraer nombre de rama
+        id: branch
+        run: |
+          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          echo "name=${BRANCH_NAME}" >> $GITHUB_OUTPUT
+          echo "Rama detectada: ${BRANCH_NAME}"
+
+      - name: Iniciar build en DockerizeAPI
+        id: build
+        run: |
+          echo "Iniciando build para rama: ${{ steps.branch.outputs.name }}"
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.DOCKERIZE_API_URL }}/api/builds" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "repositoryUrl": "${{ github.server_url }}/${{ github.repository }}",
+              "branch": "${{ steps.branch.outputs.name }}",
+              "gitToken": "${{ secrets.GITEA_TOKEN }}",
+              "imageConfig": {
+                "tag": "${{ steps.branch.outputs.name }}",
+                "includeOdbcDependencies": false
+              },
+              "registryConfig": {
+                "registryUrl": "${{ secrets.REGISTRY_URL }}",
+                "owner": "davivienda-banco"
+              }
+            }')
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+
+          if [ "$HTTP_CODE" != "202" ]; then
+            echo "Error al iniciar build: HTTP $HTTP_CODE"
+            echo "$BODY"
+            exit 1
+          fi
+
+          BUILD_ID=$(echo "$BODY" | jq -r '.buildId')
+          echo "build_id=${BUILD_ID}" >> $GITHUB_OUTPUT
+          echo "Build iniciado con ID: ${BUILD_ID}"
+
+      - name: Esperar finalizacion del build
+        run: |
+          BUILD_ID="${{ steps.build.outputs.build_id }}"
+          echo "Esperando build ${BUILD_ID}..."
+
+          MAX_ATTEMPTS=60
+          ATTEMPT=0
+
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+
+            RESPONSE=$(curl -s "${{ secrets.DOCKERIZE_API_URL }}/api/builds/${BUILD_ID}")
+            STATUS=$(echo "$RESPONSE" | jq -r '.status')
+
+            echo "Intento ${ATTEMPT}/${MAX_ATTEMPTS} - Estado: ${STATUS}"
+
+            case "$STATUS" in
+              "Completed")
+                IMAGE_URL=$(echo "$RESPONSE" | jq -r '.imageUrl')
+                echo "Build completado exitosamente!"
+                echo "Imagen: ${IMAGE_URL}"
+                exit 0
+                ;;
+              "Failed")
+                ERROR=$(echo "$RESPONSE" | jq -r '.errorMessage')
+                echo "Build fallido: ${ERROR}"
+                exit 1
+                ;;
+              "Cancelled")
+                echo "Build cancelado."
+                exit 1
+                ;;
+              *)
+                sleep 10
+                ;;
+            esac
+          done
+
+          echo "Timeout: El build no finalizo en el tiempo esperado."
+          exit 1
+
+      - name: Notificar resultado
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "Deploy SAPP exitoso para rama ${{ steps.branch.outputs.name }}"
+          else
+            echo "Deploy SAPP fallido para rama ${{ steps.branch.outputs.name }}"
+          fi

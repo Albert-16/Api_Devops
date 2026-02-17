@@ -1,0 +1,49 @@
+# ============================================================
+# Docker Compose para DockerizeAPI
+# ============================================================
+# Levanta la API de dockerizacion automatizada.
+# El contenedor necesita acceso privilegiado para que Buildah
+# pueda construir imagenes dentro del contenedor.
+# ============================================================
+
+services:
+  dockerize-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dockerize-api
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      # Sobreescribir configuracion via variables de entorno si es necesario
+      # - Registry__Url=repos.daviviendahn.dvhn
+      # - Registry__Owner=davivienda-banco
+      # - Build__MaxConcurrentBuilds=3
+      # - Build__TimeoutMinutes=10
+    volumes:
+      # Volumen para persistir logs fuera del contenedor
+      - ./logs:/app/logs
+      # Volumen temporal para los builds (mejor rendimiento)
+      - build-temp:/tmp/dockerize-builds
+    # Privilegios necesarios para que Buildah funcione dentro del contenedor
+    privileged: true
+    security_opt:
+      - seccomp=unconfined
+      - apparmor=unconfined
+    # Devices necesarios para overlayfs
+    devices:
+      - /dev/fuse:/dev/fuse
+    restart: unless-stopped
+    # Health check para monitoreo
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  build-temp:
+    driver: local
