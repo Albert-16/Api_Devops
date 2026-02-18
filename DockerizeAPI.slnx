@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DockerizeAPI/DockerizeAPI.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DockerizeAPI.Tests/DockerizeAPI.Tests.csproj" />
+  </Folder>
+</Solution>
