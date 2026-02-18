@@ -14,7 +14,9 @@
       "Bash(wsl --install:*)",
       "Bash(wsl --status:*)",
       "Bash(ls:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(sort:*)",
+      "Bash(find:*)"
     ]
   }
 }

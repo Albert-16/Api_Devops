@@ -51,6 +51,8 @@ Generated\ Files/
 # MSTest test Results
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*
+# Excepción: nuestro modelo BuildLog.cs NO debe ser ignorado
+!**/Models/Entities/BuildLog.cs
 *.trx
 
 # NUnit
