@@ -1,0 +1,117 @@
+# ============================================================
+# Auto-Deploy SAPP (Ambientes dev y uat)
+# Se ejecuta automáticamente al hacer push a sapp-dev y sapp-uat.
+# NOTA: sapp-prd está EXCLUIDA — deploy a producción es manual.
+# ============================================================
+
+name: Auto Deploy SAPP
+
+on:
+  push:
+    branches:
+      - sapp-dev
+      - sapp-uat
+      # sapp-prd EXCLUIDA por seguridad — deploy manual requerido
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extraer nombre de rama
+        id: branch
+        run: echo "BRANCH_NAME=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Extraer nombre del repositorio
+        id: repo
+        run: |
+          REPO_NAME=$(echo "${{ github.repository }}" | awk -F'/' '{print $NF}')
+          echo "REPO_NAME=${REPO_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Iniciar build en DockerizeAPI
+        id: build
+        run: |
+          echo "Iniciando build para ${{ steps.repo.outputs.REPO_NAME }}:${{ steps.branch.outputs.BRANCH_NAME }}"
+
+          RESPONSE=$(curl -s -X POST "${{ secrets.DOCKERIZE_API_URL }}/api/builds" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "repositoryUrl": "${{ github.server_url }}/${{ github.repository }}.git",
+              "branch": "${{ steps.branch.outputs.BRANCH_NAME }}",
+              "gitToken": "${{ secrets.GITEA_TOKEN }}",
+              "imageConfig": {
+                "imageName": "${{ steps.repo.outputs.REPO_NAME }}",
+                "tag": "${{ steps.branch.outputs.BRANCH_NAME }}",
+                "includeOdbcDependencies": false
+              },
+              "registryConfig": {
+                "registryUrl": "${{ secrets.REGISTRY_URL }}",
+                "owner": "davivienda-banco"
+              }
+            }')
+
+          BUILD_ID=$(echo "$RESPONSE" | jq -r '.buildId')
+
+          if [ "$BUILD_ID" = "null" ] || [ -z "$BUILD_ID" ]; then
+            echo "Error al iniciar build:"
+            echo "$RESPONSE" | jq .
+            exit 1
+          fi
+
+          echo "BUILD_ID=${BUILD_ID}" >> $GITHUB_OUTPUT
+          echo "Build iniciado: ${BUILD_ID}"
+
+      - name: Esperar resultado del build
+        id: wait
+        run: |
+          BUILD_ID="${{ steps.build.outputs.BUILD_ID }}"
+          MAX_ATTEMPTS=60  # 60 * 10s = 10 min max
+          ATTEMPT=0
+
+          echo "Esperando resultado del build ${BUILD_ID}..."
+
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 10
+
+            STATUS_RESPONSE=$(curl -s "${{ secrets.DOCKERIZE_API_URL }}/api/builds/${BUILD_ID}")
+            STATUS=$(echo "$STATUS_RESPONSE" | jq -r '.status')
+
+            echo "Intento ${ATTEMPT}/${MAX_ATTEMPTS} — Estado: ${STATUS}"
+
+            case "$STATUS" in
+              "Completed")
+                IMAGE_URL=$(echo "$STATUS_RESPONSE" | jq -r '.imageUrl // "N/A"')
+                echo "Build completado exitosamente"
+                echo "Imagen: ${IMAGE_URL}"
+                echo "STATUS=success" >> $GITHUB_OUTPUT
+                echo "IMAGE_URL=${IMAGE_URL}" >> $GITHUB_OUTPUT
+                exit 0
+                ;;
+              "Failed")
+                ERROR=$(echo "$STATUS_RESPONSE" | jq -r '.errorMessage // "Error desconocido"')
+                echo "Build fallido: ${ERROR}"
+                echo "STATUS=failed" >> $GITHUB_OUTPUT
+                exit 1
+                ;;
+              "Cancelled")
+                echo "Build cancelado"
+                echo "STATUS=cancelled" >> $GITHUB_OUTPUT
+                exit 1
+                ;;
+            esac
+          done
+
+          echo "Timeout: el build no terminó en el tiempo esperado"
+          echo "STATUS=timeout" >> $GITHUB_OUTPUT
+          exit 1
+
+      - name: Notificar resultado
+        if: always()
+        run: |
+          if [ "${{ steps.wait.outputs.STATUS }}" = "success" ]; then
+            echo "✅ Imagen publicada exitosamente: ${{ steps.wait.outputs.IMAGE_URL }}"
+          else
+            echo "❌ Build fallido o cancelado para ${{ steps.repo.outputs.REPO_NAME }}:${{ steps.branch.outputs.BRANCH_NAME }}"
+            echo "   Build ID: ${{ steps.build.outputs.BUILD_ID }}"
+            echo "   Estado: ${{ steps.wait.outputs.STATUS }}"
+          fi

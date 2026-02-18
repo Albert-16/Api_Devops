@@ -1,0 +1,57 @@
+# ============================================================
+# STAGE 1: BUILD (Compilacion)
+# Usa la imagen SDK completa para compilar el proyecto
+# ============================================================
+FROM repos.daviviendahn.dvhn/davivienda-banco/dotnet-sdk:10.0-alpine AS build
+
+WORKDIR /src
+
+# --- Paso 1: Copiar dependencias y certificados ---
+# Se copian PRIMERO los archivos de dependencias para aprovechar cache.
+# Si las dependencias no cambian, el restore se reutiliza del cache.
+COPY .tmp/nuget/ ./.tmp/nuget/
+COPY .tmp/certificates/ca/ /tmp/certificates/ca/
+COPY nuget.config ./
+COPY {{csprojPath}} ./{{csprojDir}}/
+
+# --- Paso 2: Instalar certificado CA corporativo de Davivienda ---
+# Necesario para que dotnet restore pueda descargar paquetes de feeds HTTPS internos
+RUN cat /tmp/certificates/ca/ca-davivienda.crt >> /etc/ssl/certs/ca-certificates.crt
+
+# --- Paso 3: Restaurar dependencias NuGet ---
+# Usa el nuget.config personalizado que incluye los feeds internos
+# -r linux-x64: Restaura para runtime especifico de la plataforma
+RUN dotnet restore {{csprojPath}} -r linux-x64 --configfile ./nuget.config
+
+# --- Paso 4: Copiar TODO el codigo fuente ---
+# Este paso se invalida cada vez que cambia cualquier archivo de codigo,
+# pero los pasos anteriores (1-3) se mantienen en cache
+COPY . .
+
+# --- Paso 5: Limpiar archivos temporales ---
+RUN rm -f -r /tmp/*
+
+# --- Paso 6: Compilar y publicar la aplicacion ---
+# -c Release: Compilacion optimizada para produccion
+# -o /app: Directorio de salida
+# --no-restore: No restaurar de nuevo (ya se hizo en paso 3)
+RUN dotnet publish {{csprojPath}} -r linux-x64 -c Release -o /app --no-restore
+
+# ============================================================
+# STAGE 2: RUNTIME (Ejecucion)
+# Usa la imagen ASP.NET ligera, solo lo necesario para ejecutar
+# ============================================================
+FROM repos.daviviendahn.dvhn/davivienda-banco/dotnet-aspnet:10.0-alpine AS final
+
+# --- Instalar certificado CA corporativo ---
+# Tambien necesario en runtime para llamadas HTTPS a servicios internos
+COPY .tmp/certificates/ca/ /tmp/certificates/ca/
+RUN cat /tmp/certificates/ca/ca-davivienda.crt >> /etc/ssl/certs/ca-certificates.crt \
+    && rm -rf /tmp/*
+
+# --- Copiar aplicacion compilada desde Stage 1 ---
+WORKDIR /app
+COPY --from=build /app .
+
+# --- Punto de entrada: ejecutar la aplicacion ---
+ENTRYPOINT ["dotnet", "{{assemblyName}}.dll"]

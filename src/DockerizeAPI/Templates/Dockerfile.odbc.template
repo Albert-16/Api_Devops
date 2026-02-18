@@ -1,0 +1,96 @@
+# ============================================================
+# STAGE 1: BUILD (Compilacion)
+# Usa la imagen SDK Debian para compilar el proyecto
+# ============================================================
+FROM repos.daviviendahn.dvhn/davivienda-banco/dotnet-sdk:10.0 AS build
+
+WORKDIR /src
+
+# --- Paso 1: Copiar dependencias y certificados ---
+COPY .tmp/nuget/ ./.tmp/nuget/
+COPY .tmp/certificates/ca/ /tmp/certificates/ca/
+COPY nuget.config ./
+COPY {{csprojPath}} ./{{csprojDir}}/
+
+# --- Paso 2: Instalar certificado CA corporativo ---
+RUN cat /tmp/certificates/ca/ca-davivienda.crt >> /etc/ssl/certs/ca-certificates.crt
+
+# --- Paso 3: Restaurar dependencias NuGet ---
+RUN dotnet restore {{csprojPath}} -r linux-x64 --configfile ./nuget.config
+
+# --- Paso 4: Copiar TODO el codigo fuente ---
+COPY . .
+
+# --- Paso 5: Limpiar archivos temporales ---
+RUN rm -f -r /tmp/*
+
+# --- Paso 6: Compilar y publicar ---
+RUN dotnet publish {{csprojPath}} -r linux-x64 -c Release -o /app --no-restore
+
+# ============================================================
+# STAGE 2: RUNTIME con ODBC (Ejecucion)
+# Usa Debian porque ibm-iaccess solo existe para Debian
+# ============================================================
+FROM repos.daviviendahn.dvhn/davivienda-banco/dotnet-aspnet:10.0 AS final
+
+# ARG: Token de autenticacion para el repositorio Debian privado de Gitea.
+# Solo existe durante el build, NO queda en la imagen final.
+ARG REPO_TOKEN
+
+# --- Copiar certificados y herramienta wget ---
+COPY .tmp/certificates/ca/ /tmp/certificates/ca/
+COPY .tmp/wget/ /tmp/wget/
+
+# --- Instalar certificado CA + wget + configurar repositorio Debian de Gitea ---
+# Se consolidan en un solo RUN para reducir layers y tamano de imagen.
+# Pasos internos:
+#   1. Instalar certificado CA de Davivienda
+#   2. Instalar wget desde .deb local (necesario para descargar la key del repo)
+#   3. Descargar la key publica del repositorio Debian de Gitea
+#   4. Configurar autenticacion al repositorio Debian
+#   5. Agregar el repositorio Debian de Gitea como fuente de paquetes
+RUN cat /tmp/certificates/ca/ca-davivienda.crt >> /etc/ssl/certs/ca-certificates.crt \
+    && dpkg -i /tmp/wget/*.deb || true \
+    && mkdir -p /etc/apt/keyrings \
+    && wget --header "Authorization: token $REPO_TOKEN" \
+       -O /etc/apt/keyrings/gitea-Davivienda-Banco.asc \
+       https://repos.daviviendahn.dvhn/api/packages/Davivienda-Banco/debian/repository.key \
+    && echo "machine repos.daviviendahn.dvhn login token password ${REPO_TOKEN}" \
+       > /etc/apt/auth.conf.d/gitea.conf \
+    && chmod 600 /etc/apt/auth.conf.d/gitea.conf \
+    && echo "deb [signed-by=/etc/apt/keyrings/gitea-Davivienda-Banco.asc] https://repos.daviviendahn.dvhn/api/packages/Davivienda-Banco/debian bookworm main" \
+       > /etc/apt/sources.list.d/gitea-davivienda.list
+
+# --- Instalar drivers ODBC ---
+# Paquetes necesarios para conectarse a bases de datos via ODBC:
+#   - unixodbc, unixodbc-common, unixodbc-dev: Framework ODBC para Linux
+#   - libodbc2, libodbcinst2, libodbccr2, odbcinst: Librerias ODBC core
+#   - libltdl7: Libreria de carga dinamica (dependencia de ODBC)
+#   - libreadline8, readline-common: Libreria de linea de comandos (dependencia de ibm-iaccess)
+#   - ibm-iaccess: Driver ODBC de IBM para conectarse a AS400/IBM i
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        unixodbc \
+        unixodbc-common \
+        unixodbc-dev \
+        libodbc2 \
+        libodbcinst2 \
+        libodbccr2 \
+        odbcinst \
+        libltdl7 \
+        libreadline8 \
+        readline-common \
+        ibm-iaccess \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# --- Validacion opcional de drivers ODBC ---
+# Descomentar para verificar que los drivers se instalaron correctamente
+#RUN odbcinst -q -d
+
+# --- Copiar aplicacion compilada desde Stage 1 ---
+WORKDIR /app
+COPY --from=build /app .
+
+# --- Punto de entrada ---
+ENTRYPOINT ["dotnet", "{{assemblyName}}.dll"]

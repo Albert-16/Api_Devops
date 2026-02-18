@@ -1,0 +1,31 @@
+[Unit]
+Description=DockerizeAPI - Automated Docker Image Builder
+After=network.target
+
+[Service]
+Type=notify
+WorkingDirectory=/opt/dockerize-api
+ExecStart=/opt/dockerize-api/DockerizeAPI --urls http://0.0.0.0:5050
+Restart=always
+RestartSec=10
+
+# Seguridad: no correr como root
+User=dockerize
+Group=dockerize
+
+# Variables de entorno
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=DOTNET_EnableDiagnostics=0
+
+# Logs a journald (Serilog Console sink los captura)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=dockerize-api
+
+# Limites
+LimitNOFILE=65536
+TimeoutStartSec=30
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

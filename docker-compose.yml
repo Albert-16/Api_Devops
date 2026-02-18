@@ -1,0 +1,47 @@
+# ============================================================
+# DockerizeAPI — Docker Compose
+# Levanta la API de dockerización automatizada.
+# Requiere Docker/Podman con soporte para --privileged o --security-opt.
+# ============================================================
+
+services:
+  dockerize-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dockerize-api
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - DOTNET_EnableDiagnostics=0
+      # Overrides de configuración (opcionales, usan defaults de appsettings.json)
+      # - Registry__Url=repos.daviviendahn.dvhn
+      # - Registry__Owner=davivienda-banco
+      # - Build__MaxConcurrentBuilds=3
+      # - Build__TimeoutMinutes=10
+      # - Build__TempDirectory=/tmp/dockerize-builds
+    volumes:
+      # Directorio temporal para builds (persistente entre reinicios)
+      - build-temp:/tmp/dockerize-builds
+      # Logs de la aplicación
+      - app-logs:/app/logs
+    # Necesario para que Buildah funcione dentro del contenedor
+    security_opt:
+      - seccomp:unconfined
+    # Alternativa si security_opt no es suficiente:
+    # privileged: true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  build-temp:
+    driver: local
+  app-logs:
+    driver: local
