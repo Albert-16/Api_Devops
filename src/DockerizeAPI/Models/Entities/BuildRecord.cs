@@ -93,8 +93,8 @@ public sealed class BuildRecord
     /// <summary>Si es true, salida mínima del build.</summary>
     public bool Quiet { get; set; }
 
-    /// <summary>Tipo de red durante el build.</summary>
-    public NetworkMode Network { get; set; } = NetworkMode.Bridge;
+    /// <summary>Tipo de red durante el build. Default: Host (compatible con rootless).</summary>
+    public NetworkMode Network { get; set; } = NetworkMode.Host;
 
     /// <summary>Nivel de detalle del progreso.</summary>
     public ProgressMode Progress { get; set; } = ProgressMode.Auto;

@@ -66,7 +66,7 @@ public sealed class BuildService : IBuildService
             NoCache = request.ImageConfig?.NoCache ?? false,
             Pull = request.ImageConfig?.Pull ?? false,
             Quiet = request.ImageConfig?.Quiet ?? false,
-            Network = request.ImageConfig?.Network ?? NetworkMode.Bridge,
+            Network = request.ImageConfig?.Network ?? NetworkMode.Host,
             Progress = request.ImageConfig?.Progress ?? ProgressMode.Auto,
             OriginalRequestJson = JsonSerializer.Serialize(request)
         };

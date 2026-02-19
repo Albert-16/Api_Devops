@@ -226,8 +226,11 @@ public sealed class BuildahService : IBuildahService
         if (windowsPath.StartsWith('/'))
             return windowsPath;
 
+        // Resolver rutas relativas a absolutas antes de convertir
+        string absolutePath = Path.GetFullPath(windowsPath);
+
         // D:\Proyectos\foo → /mnt/d/Proyectos/foo
-        string normalized = windowsPath.Replace('\\', '/');
+        string normalized = absolutePath.Replace('\\', '/');
         if (normalized.Length >= 2 && normalized[1] == ':')
         {
             char driveLetter = char.ToLowerInvariant(normalized[0]);

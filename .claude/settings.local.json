@@ -16,7 +16,30 @@
       "Bash(ls:*)",
       "Bash(taskkill:*)",
       "Bash(sort:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(wsl echo:*)",
+      "Bash(wsl -u root -- bash -c \"apt-get update -y && apt-get install -y buildah git fuse-overlayfs slirp4netns uidmap\")",
+      "Bash(wsl buildah:*)",
+      "Bash(wsl git --version)",
+      "Bash(wsl -d Ubuntu -- bash -c \"git --version && dotnet --version 2>/dev/null || echo ''dotnet: no en WSL \\(no necesario\\)'' && buildah info 2>/dev/null | grep -E ''rootless|version'' | head -5\")",
+      "Bash(wsl:*)",
+      "Bash(powershell.exe -Command \"Start-Process dotnet -ArgumentList ''run --project D:/Proyectos/Api_Devops/src/DockerizeAPI/DockerizeAPI.csproj'' -WindowStyle Hidden -RedirectStandardOutput C:/Temp/api-out.log -RedirectStandardError C:/Temp/api-err.log\")",
+      "Bash(powershell.exe -Command \"Get-Process dotnet 2>null | Select-Object Id,ProcessName,StartTime | Format-Table\")",
+      "Bash(powershell.exe -Command \"netstat -ano | Select-String ''5050|5051|8080''\")",
+      "Bash(powershell.exe -Command \"netstat -ano | Select-String ''LISTEN'' | Select-String ''5050|5051|5052|8080''\")",
+      "Bash(powershell.exe -Command \"Get-NetTCPConnection -State Listen | Where-Object {$_LocalPort -in 5050,5051,8080,5000,5001} | Format-Table\")",
+      "Bash(powershell.exe -Command \"Get-NetTCPConnection -State Listen | Format-Table LocalPort,OwningProcess\")",
+      "Bash(powershell.exe -Command \"Test-Path ''C:/Temp/api-out.log''\")",
+      "Bash(python3:*)",
+      "Bash(powershell.exe -Command \"Get-ChildItem ''D:/Proyectos/Api_Devops/src/DockerizeAPI/tmp/dockerize-builds/30d3fbd0-9b04-4893-a612-1abfc19dd5de'' | Select-Object Name\")",
+      "Bash(powershell.exe -Command \"Get-Process -Id 11996 | Select-Object Id,Path,StartTime\")",
+      "Bash(powershell.exe -Command \"Stop-Process -Name dotnet -Force -ErrorAction SilentlyContinue; ''Procesos dotnet detenidos''\")",
+      "Bash(tr:*)",
+      "Bash(tasklist:*)",
+      "Bash(git clone:*)",
+      "Bash(MSYS_NO_PATHCONV=1 wsl ls:*)",
+      "Bash(MSYS_NO_PATHCONV=1 wsl --cd /mnt/d/Proyectos/Api_Devops/src/DockerizeAPI/tmp/manual-test/workspace buildah bud --tag test-local:latest --platform linux/amd64 --layers --network host -f Dockerfile .)",
+      "Bash(git rm:*)"
     ]
   }
 }

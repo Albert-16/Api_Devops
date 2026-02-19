@@ -10,7 +10,7 @@ WORKDIR /src
 COPY .tmp/nuget/ ./.tmp/nuget/
 COPY .tmp/certificates/ca/ /tmp/certificates/ca/
 COPY nuget.config ./
-COPY {{csprojPath}} ./{{csprojDir}}/
+COPY {{csprojPath}} ./{{csprojDir}}
 
 # --- Paso 2: Instalar certificado CA corporativo ---
 RUN cat /tmp/certificates/ca/ca-davivienda.crt >> /etc/ssl/certs/ca-certificates.crt

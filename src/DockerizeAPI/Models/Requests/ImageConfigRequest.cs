@@ -36,8 +36,8 @@ public sealed record ImageConfigRequest
     /// <summary>Etiquetas metadata para la imagen (--label KEY=VALUE).</summary>
     public Dictionary<string, string>? Labels { get; init; }
 
-    /// <summary>Tipo de red durante el build. Default: Bridge</summary>
-    public NetworkMode Network { get; init; } = NetworkMode.Bridge;
+    /// <summary>Tipo de red durante el build. Default: Host (compatible con rootless).</summary>
+    public NetworkMode Network { get; init; } = NetworkMode.Host;
 
     /// <summary>Si es true, reconstruye todo desde cero sin cache. Default: false</summary>
     public bool NoCache { get; init; }

@@ -12,7 +12,7 @@ WORKDIR /src
 COPY .tmp/nuget/ ./.tmp/nuget/
 COPY .tmp/certificates/ca/ /tmp/certificates/ca/
 COPY nuget.config ./
-COPY {{csprojPath}} ./{{csprojDir}}/
+COPY {{csprojPath}} ./{{csprojDir}}
 
 # --- Paso 2: Instalar certificado CA corporativo de Davivienda ---
 # Necesario para que dotnet restore pueda descargar paquetes de feeds HTTPS internos

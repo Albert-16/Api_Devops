@@ -193,11 +193,12 @@ public sealed class BuildProcessorService : BackgroundService
                 NoCache = buildRecord?.NoCache ?? false,
                 Pull = buildRecord?.Pull ?? false,
                 Quiet = buildRecord?.Quiet ?? false,
-                Network = (buildRecord?.Network ?? NetworkMode.Bridge) switch
+                Network = buildRecord?.Network switch
                 {
                     NetworkMode.Host => "host",
                     NetworkMode.None => "none",
-                    _ => "bridge"
+                    NetworkMode.Bridge => "bridge",
+                    _ => null  // No pasar --network, buildah usa su default (compatible con rootless)
                 },
                 BuildArgs = BuildMergedBuildArgs(request),
                 Labels = buildRecord?.Labels
