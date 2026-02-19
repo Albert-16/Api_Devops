@@ -39,7 +39,9 @@
       "Bash(git clone:*)",
       "Bash(MSYS_NO_PATHCONV=1 wsl ls:*)",
       "Bash(MSYS_NO_PATHCONV=1 wsl --cd /mnt/d/Proyectos/Api_Devops/src/DockerizeAPI/tmp/manual-test/workspace buildah bud --tag test-local:latest --platform linux/amd64 --layers --network host -f Dockerfile .)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(del /f \"D:\\\\Proyectos\\\\Api_Devops\\\\null\")",
+      "Bash(cmd.exe /c \"del D:\\\\Proyectos\\\\Api_Devops\\\\null\")"
     ]
   }
 }

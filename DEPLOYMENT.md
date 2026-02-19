@@ -256,25 +256,42 @@ El puerto por defecto es configurable via la variable de entorno `ASPNETCORE_URL
 
 ### 5.1 Health checks
 
+**Health check general de la API:**
+```
+curl http://localhost:5050/api/health
+```
+
+Respuesta esperada (200 OK):
+```json
+{
+  "status": "Healthy",
+  "service": "DockerizeAPI",
+  "timestamp": "2026-02-19T06:00:00+00:00",
+  "version": "1.0.0"
+}
+```
+
+**Liveness probe** (verifica que la app responde):
 ```
 curl http://localhost:5050/health/live
 ```
 
 Respuesta esperada: `Healthy`
 
+**Readiness probe** (verifica que la app esta lista):
 ```
 curl http://localhost:5050/health/ready
 ```
 
 Respuesta esperada: `Healthy`
 
-### 5.2 Verificar que la API responde
+### 5.2 Verificar que el listado de builds funciona
 
 ```
 curl http://localhost:5050/api/builds
 ```
 
-Respuesta esperada:
+Respuesta esperada (200 OK):
 ```json
 {
   "items": [],
@@ -291,23 +308,100 @@ Respuesta esperada:
 
 ```
 curl http://localhost:5050/api/templates/alpine
+```
+
+Respuesta esperada (200 OK):
+```json
+{
+  "name": "alpine",
+  "content": "FROM repos.daviviendahn.dvhn/davivienda-banco/dotnet-sdk:10.0-alpine AS build\n...",
+  "isOverride": false,
+  "lastModifiedAt": null
+}
+```
+
+```
 curl http://localhost:5050/api/templates/odbc
+```
+
+Respuesta esperada (200 OK):
+```json
+{
+  "name": "odbc",
+  "content": "FROM repos.daviviendahn.dvhn/davivienda-banco/dotnet-sdk:10.0 AS build\n...",
+  "isOverride": false,
+  "lastModifiedAt": null
+}
 ```
 
 Ambos deben devolver el contenido del template con los placeholders `{{csprojPath}}`, `{{csprojDir}}`, `{{assemblyName}}`.
 
 ### 5.4 Swagger (solo en Development)
 
-Si la API esta en modo Development, Swagger esta disponible en:
+Si la API esta en modo Development, la documentacion interactiva esta disponible en:
 ```
 http://localhost:5050/swagger
 ```
 
 ---
 
-## 6. Uso de la API
+## 6. Referencia Completa de Endpoints
 
-### 6.1 Crear un build (caso basico — Alpine sin ODBC)
+### Resumen de todos los endpoints
+
+| Metodo | Ruta | Descripcion |
+|--------|------|-------------|
+| GET | `/api/health` | Health check general |
+| GET | `/health/live` | Liveness probe |
+| GET | `/health/ready` | Readiness probe |
+| POST | `/api/builds` | Crear nuevo build |
+| GET | `/api/builds` | Listar builds (paginado) |
+| GET | `/api/builds/{buildId}` | Detalle de un build |
+| DELETE | `/api/builds/{buildId}` | Cancelar build |
+| GET | `/api/builds/{buildId}/logs` | Logs en tiempo real (SSE) |
+| POST | `/api/builds/{buildId}/retry` | Reintentar build fallido |
+| POST | `/api/builds/preview-dockerfile` | Previsualizar Dockerfile |
+| GET | `/api/templates/alpine` | Ver template Alpine |
+| GET | `/api/templates/odbc` | Ver template ODBC |
+| PUT | `/api/templates/{templateName}` | Modificar template |
+
+---
+
+### 6.1 POST /api/builds — Crear un build
+
+**Campos del request:**
+
+| Campo | Tipo | Requerido | Default | Descripcion |
+|-------|------|-----------|---------|-------------|
+| `repositoryUrl` | string | Si | — | URL del repositorio en Gitea |
+| `branch` | string | No | `"main"` | Rama a clonar |
+| `gitToken` | string | Si | — | Token de acceso Gitea |
+| `imageConfig` | object | No | null | Configuracion de imagen (ver abajo) |
+| `registryConfig` | object | No | null | Configuracion del registry (ver abajo) |
+
+**Campos de `imageConfig` (todos opcionales):**
+
+| Campo | Tipo | Default | Descripcion |
+|-------|------|---------|-------------|
+| `imageName` | string | Nombre del repo | Nombre de la imagen en el registry |
+| `tag` | string | Nombre de la rama | Tag de la imagen |
+| `includeOdbcDependencies` | bool | `false` | `true` = template Debian con ODBC/IBM iAccess |
+| `platform` | string | `"linux/amd64"` | Plataforma target |
+| `noCache` | bool | `false` | Reconstruir sin cache de capas |
+| `pull` | bool | `false` | Siempre descargar imagen base mas reciente |
+| `quiet` | bool | `false` | Salida minima de buildah |
+| `network` | string | `"Host"` | Red durante build: `Host`, `Bridge`, `None` |
+| `labels` | dict | null | Labels metadata `(--label KEY=VALUE)` |
+| `buildArgs` | dict | null | Build arguments `(--build-arg KEY=VALUE)` |
+
+**Campos de `registryConfig` (todos opcionales):**
+
+| Campo | Tipo | Default | Descripcion |
+|-------|------|---------|-------------|
+| `registryUrl` | string | `repos.daviviendahn.dvhn` | URL del Container Registry |
+| `owner` | string | `davivienda-banco` | Organizacion en Gitea |
+
+#### Ejemplo 1: Build basico (Alpine, sin ODBC)
 
 ```
 curl -X POST http://localhost:5050/api/builds \
@@ -315,32 +409,38 @@ curl -X POST http://localhost:5050/api/builds \
   -d '{
     "repositoryUrl": "https://repos.daviviendahn.dvhn/davivienda-banco/mi-microservicio.git",
     "branch": "main",
-    "gitToken": "<TU_GITEA_TOKEN>"
+    "gitToken": "abc123_tu_token_de_gitea"
   }'
 ```
-
-Esto:
-1. Clona el repositorio usando el token
-2. Auto-detecta el archivo `.csproj`
-3. Genera un Dockerfile Alpine (multi-stage, ligero)
-4. Construye la imagen con Buildah
-5. Hace login al registry con el token
-6. Publica la imagen como `repos.daviviendahn.dvhn/davivienda-banco/mi-microservicio:main`
-7. Limpia archivos temporales
 
 Respuesta (202 Accepted):
 ```json
 {
-  "buildId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "buildId": "c1271876-58da-4a05-bd4d-44abd5142e6c",
   "status": 0,
   "repositoryUrl": "https://repos.daviviendahn.dvhn/davivienda-banco/mi-microservicio.git",
   "branch": "main",
   "imageName": "mi-microservicio",
-  "imageTag": "main"
+  "imageTag": "main",
+  "includeOdbcDependencies": false,
+  "createdAt": "2026-02-19T06:16:50.885+00:00",
+  "completedAt": null,
+  "imageUrl": null
 }
 ```
 
-### 6.2 Crear un build con ODBC (para servicios que conectan a AS400)
+Imagen resultante: `repos.daviviendahn.dvhn/davivienda-banco/mi-microservicio:main`
+
+Lo que hace internamente:
+1. Clona el repositorio usando el token en la URL
+2. Auto-detecta el archivo `.csproj`
+3. Genera un Dockerfile Alpine (multi-stage, ligero)
+4. Construye la imagen con Buildah
+5. Hace login al registry con el token
+6. Publica la imagen al Container Registry
+7. Limpia archivos temporales e imagen local
+
+#### Ejemplo 2: Build con ODBC (para servicios que conectan a AS400)
 
 ```
 curl -X POST http://localhost:5050/api/builds \
@@ -348,16 +448,16 @@ curl -X POST http://localhost:5050/api/builds \
   -d '{
     "repositoryUrl": "https://repos.daviviendahn.dvhn/davivienda-banco/souma-integration.git",
     "branch": "develop",
-    "gitToken": "<TU_GITEA_TOKEN>",
+    "gitToken": "abc123_tu_token_de_gitea",
     "imageConfig": {
       "includeOdbcDependencies": true
     }
   }'
 ```
 
-Esto usa el template Debian con drivers ODBC/IBM iAccess. El `gitToken` se pasa automaticamente como `REPO_TOKEN` al Dockerfile para autenticar la descarga de paquetes del repositorio Debian de Gitea.
+Usa template Debian con drivers ODBC/IBM iAccess. El `gitToken` se pasa automaticamente como `REPO_TOKEN` al Dockerfile para autenticar la descarga de paquetes del repositorio Debian de Gitea.
 
-### 6.3 Crear un build con nombre de imagen personalizado
+#### Ejemplo 3: Build con nombre de imagen y tag personalizados
 
 ```
 curl -X POST http://localhost:5050/api/builds \
@@ -365,7 +465,7 @@ curl -X POST http://localhost:5050/api/builds \
   -d '{
     "repositoryUrl": "https://repos.daviviendahn.dvhn/davivienda-banco/mi-servicio.git",
     "branch": "release/1.0",
-    "gitToken": "<TU_GITEA_TOKEN>",
+    "gitToken": "abc123_tu_token_de_gitea",
     "imageConfig": {
       "imageName": "mi-servicio-custom",
       "tag": "v1.0.0"
@@ -375,7 +475,7 @@ curl -X POST http://localhost:5050/api/builds \
 
 Imagen resultante: `repos.daviviendahn.dvhn/davivienda-banco/mi-servicio-custom:v1.0.0`
 
-### 6.4 Crear un build con registry personalizado
+#### Ejemplo 4: Build con registry diferente
 
 ```
 curl -X POST http://localhost:5050/api/builds \
@@ -383,7 +483,7 @@ curl -X POST http://localhost:5050/api/builds \
   -d '{
     "repositoryUrl": "https://repos.daviviendahn.dvhn/davivienda-banco/mi-servicio.git",
     "branch": "main",
-    "gitToken": "<TU_GITEA_TOKEN>",
+    "gitToken": "abc123_tu_token_de_gitea",
     "registryConfig": {
       "registryUrl": "otro-registry.dvhn",
       "owner": "otra-organizacion"
@@ -391,7 +491,9 @@ curl -X POST http://localhost:5050/api/builds \
   }'
 ```
 
-### 6.5 Crear un build con opciones avanzadas
+Imagen resultante: `otro-registry.dvhn/otra-organizacion/mi-servicio:main`
+
+#### Ejemplo 5: Build con todas las opciones avanzadas
 
 ```
 curl -X POST http://localhost:5050/api/builds \
@@ -399,15 +501,17 @@ curl -X POST http://localhost:5050/api/builds \
   -d '{
     "repositoryUrl": "https://repos.daviviendahn.dvhn/davivienda-banco/mi-servicio.git",
     "branch": "main",
-    "gitToken": "<TU_GITEA_TOKEN>",
+    "gitToken": "abc123_tu_token_de_gitea",
     "imageConfig": {
       "imageName": "mi-servicio",
       "tag": "v2.0.0",
+      "includeOdbcDependencies": false,
       "noCache": true,
       "pull": true,
       "labels": {
         "version": "2.0.0",
-        "maintainer": "equipo-arquitectura"
+        "maintainer": "equipo-arquitectura",
+        "environment": "production"
       },
       "buildArgs": {
         "ENV_NAME": "production"
@@ -416,20 +520,232 @@ curl -X POST http://localhost:5050/api/builds \
   }'
 ```
 
-| Opcion | Tipo | Default | Descripcion |
-|--------|------|---------|-------------|
-| `imageName` | string | Se deduce del nombre del repo | Nombre de la imagen |
-| `tag` | string | Nombre de la rama | Tag de la imagen |
-| `includeOdbcDependencies` | bool | `false` | Usar template Debian con ODBC |
-| `platform` | string | `linux/amd64` | Plataforma target |
-| `noCache` | bool | `false` | Reconstruir sin cache |
-| `pull` | bool | `false` | Siempre descargar imagen base mas reciente |
-| `quiet` | bool | `false` | Salida minima |
-| `network` | enum | `Host` | Red durante build: `Host`, `Bridge`, `None` |
-| `labels` | dict | null | Labels metadata para la imagen |
-| `buildArgs` | dict | null | Build arguments adicionales |
+---
 
-### 6.6 Previsualizar un Dockerfile sin ejecutar build
+### 6.2 GET /api/builds — Listar builds
+
+**Query parameters (todos opcionales):**
+
+| Parametro | Tipo | Default | Descripcion |
+|-----------|------|---------|-------------|
+| `page` | int | 1 | Numero de pagina |
+| `pageSize` | int | 20 | Builds por pagina |
+| `status` | int | null | Filtrar por estado (0-6) |
+| `branch` | string | null | Filtrar por rama |
+| `repositoryUrl` | string | null | Filtrar por URL de repositorio |
+
+#### Ejemplo: Listar todos los builds
+
+```
+curl http://localhost:5050/api/builds
+```
+
+Respuesta (200 OK):
+```json
+{
+  "items": [
+    {
+      "buildId": "c1271876-58da-4a05-bd4d-44abd5142e6c",
+      "status": 4,
+      "repositoryUrl": "https://repos.daviviendahn.dvhn/davivienda-banco/mi-servicio.git",
+      "branch": "main",
+      "imageName": "mi-servicio",
+      "imageTag": "main",
+      "includeOdbcDependencies": false,
+      "createdAt": "2026-02-19T06:16:50.885+00:00",
+      "completedAt": "2026-02-19T06:17:07.146+00:00",
+      "imageUrl": "repos.daviviendahn.dvhn/davivienda-banco/mi-servicio:main"
+    }
+  ],
+  "page": 1,
+  "pageSize": 20,
+  "totalCount": 1,
+  "totalPages": 1,
+  "hasNextPage": false,
+  "hasPreviousPage": false
+}
+```
+
+#### Ejemplo: Filtrar builds fallidos
+
+```
+curl "http://localhost:5050/api/builds?status=5"
+```
+
+#### Ejemplo: Filtrar por rama con paginacion
+
+```
+curl "http://localhost:5050/api/builds?branch=develop&page=1&pageSize=5"
+```
+
+---
+
+### 6.3 GET /api/builds/{buildId} — Detalle de un build
+
+```
+curl http://localhost:5050/api/builds/c1271876-58da-4a05-bd4d-44abd5142e6c
+```
+
+Respuesta (200 OK):
+```json
+{
+  "buildId": "c1271876-58da-4a05-bd4d-44abd5142e6c",
+  "status": 4,
+  "repositoryUrl": "https://repos.daviviendahn.dvhn/davivienda-banco/mi-servicio.git",
+  "branch": "main",
+  "commitSha": "77f92d2150959ec43a55a87ab4134485f94679b",
+  "imageName": "mi-servicio",
+  "imageTag": "main",
+  "includeOdbcDependencies": false,
+  "errorMessage": null,
+  "generatedDockerfile": "FROM repos.daviviendahn.dvhn/davivienda-banco/dotnet-sdk:10.0-alpine AS build\n...",
+  "csprojPath": "MiServicio/MiServicio.csproj",
+  "assemblyName": "MiServicio",
+  "createdAt": "2026-02-19T06:16:50.885+00:00",
+  "startedAt": "2026-02-19T06:16:50.888+00:00",
+  "completedAt": "2026-02-19T06:17:07.146+00:00",
+  "imageSizeBytes": null,
+  "retryCount": 0,
+  "imageUrl": "repos.daviviendahn.dvhn/davivienda-banco/mi-servicio:main",
+  "logs": [
+    {
+      "message": "Estado actualizado a: Cloning",
+      "level": "info",
+      "timestamp": "2026-02-19T06:16:50.888+00:00"
+    },
+    {
+      "message": "Repositorio clonado exitosamente",
+      "level": "info",
+      "timestamp": "2026-02-19T06:16:51.320+00:00"
+    },
+    {
+      "message": "Estado actualizado a: Building",
+      "level": "info",
+      "timestamp": "2026-02-19T06:16:51.392+00:00"
+    },
+    {
+      "message": "Imagen construida exitosamente",
+      "level": "info",
+      "timestamp": "2026-02-19T06:17:06.823+00:00"
+    }
+  ]
+}
+```
+
+Si no existe, retorna 404:
+```json
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5",
+  "title": "Recurso no encontrado",
+  "status": 404,
+  "detail": "Build c1271876-... no encontrado."
+}
+```
+
+---
+
+### 6.4 GET /api/builds/{buildId}/logs — Logs en tiempo real (SSE)
+
+**Si el build esta en progreso**, abre una conexion Server-Sent Events:
+
+```
+curl -N http://localhost:5050/api/builds/c1271876-58da-4a05-bd4d-44abd5142e6c/logs
+```
+
+Salida en tiempo real (text/event-stream):
+```
+data: Estado actualizado a: Cloning
+
+data: Clonando repositorio: https://repos.daviviendahn.dvhn/... rama main
+
+data: Repositorio clonado exitosamente
+
+data: Estado actualizado a: Building
+
+data: Iniciando construccion de imagen...
+
+data: Imagen construida exitosamente
+
+```
+
+**Si el build ya termino**, retorna todos los logs como JSON array:
+```json
+[
+  {
+    "message": "Estado actualizado a: Cloning",
+    "level": "info",
+    "timestamp": "2026-02-19T06:16:50.888+00:00"
+  },
+  {
+    "message": "Imagen construida exitosamente",
+    "level": "info",
+    "timestamp": "2026-02-19T06:17:06.823+00:00"
+  }
+]
+```
+
+---
+
+### 6.5 DELETE /api/builds/{buildId} — Cancelar build
+
+Solo funciona para builds en estado Queued (0), Cloning (1), Building (2) o Pushing (3).
+
+```
+curl -X DELETE http://localhost:5050/api/builds/c1271876-58da-4a05-bd4d-44abd5142e6c
+```
+
+Respuesta exitosa: **204 No Content** (sin cuerpo)
+
+Si el build ya termino (Completed/Failed/Cancelled), retorna 409:
+```json
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+  "title": "Conflicto",
+  "status": 409,
+  "detail": "No se puede cancelar un build en estado Completed."
+}
+```
+
+---
+
+### 6.6 POST /api/builds/{buildId}/retry — Reintentar build fallido
+
+Solo funciona para builds en estado Failed (5).
+
+```
+curl -X POST http://localhost:5050/api/builds/c1271876-58da-4a05-bd4d-44abd5142e6c/retry
+```
+
+Respuesta (200 OK) — retorna un **nuevo build** con nuevo ID:
+```json
+{
+  "buildId": "nuevo-guid-del-retry",
+  "status": 0,
+  "repositoryUrl": "https://repos.daviviendahn.dvhn/davivienda-banco/mi-servicio.git",
+  "branch": "main",
+  "imageName": "mi-servicio",
+  "imageTag": "main",
+  "includeOdbcDependencies": false,
+  "createdAt": "2026-02-19T06:20:00+00:00",
+  "completedAt": null,
+  "imageUrl": null
+}
+```
+
+Si el build no esta en Failed, retorna 409:
+```json
+{
+  "title": "Conflicto",
+  "status": 409,
+  "detail": "Solo se pueden reintentar builds en estado Failed."
+}
+```
+
+---
+
+### 6.7 POST /api/builds/preview-dockerfile — Previsualizar Dockerfile
+
+Genera el Dockerfile sin ejecutar ningun build. Util para verificar el resultado antes de construir.
 
 ```
 curl -X POST http://localhost:5050/api/builds/preview-dockerfile \
@@ -441,57 +757,106 @@ curl -X POST http://localhost:5050/api/builds/preview-dockerfile \
   }'
 ```
 
+Respuesta (200 OK):
+```json
+{
+  "content": "FROM repos.daviviendahn.dvhn/davivienda-banco/dotnet-sdk:10.0-alpine AS build\nWORKDIR /src\nCOPY .tmp/nuget/ ./.tmp/nuget/\nCOPY nuget.config ./\nCOPY MiServicio/MiServicio.csproj ./MiServicio/\n...\nENTRYPOINT [\"dotnet\", \"MiServicio.dll\"]\n",
+  "templateType": "alpine",
+  "placeholders": {
+    "csprojPath": "MiServicio/MiServicio.csproj",
+    "csprojDir": "MiServicio/",
+    "assemblyName": "MiServicio"
+  }
+}
+```
+
+Para preview con ODBC:
+```
+curl -X POST http://localhost:5050/api/builds/preview-dockerfile \
+  -H "Content-Type: application/json" \
+  -d '{
+    "csprojPath": "SoumaIntegration/SoumaIntegration.csproj",
+    "includeOdbcDependencies": true
+  }'
+```
+
+---
+
+### 6.8 GET /api/templates/{nombre} — Ver template
+
+```
+curl http://localhost:5050/api/templates/alpine
+```
+
+Respuesta (200 OK):
+```json
+{
+  "name": "alpine",
+  "content": "FROM repos.daviviendahn.dvhn/davivienda-banco/dotnet-sdk:10.0-alpine AS build\nWORKDIR /src\n...",
+  "isOverride": false,
+  "lastModifiedAt": null
+}
+```
+
+- `isOverride: false` = usando el template embebido original
+- `isOverride: true` = usando un override personalizado
+
+---
+
+### 6.9 PUT /api/templates/{nombre} — Modificar template
+
+Modifica un template en caliente sin reiniciar la API. El override persiste entre reinicios.
+
+```
+curl -X PUT http://localhost:5050/api/templates/alpine \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "FROM repos.daviviendahn.dvhn/davivienda-banco/dotnet-sdk:10.0-alpine AS build\nWORKDIR /src\nCOPY .tmp/nuget/ ./.tmp/nuget/\nCOPY nuget.config ./\nCOPY {{csprojPath}} ./{{csprojDir}}\nRUN dotnet restore {{csprojPath}} -r linux-x64 --configfile ./nuget.config\nCOPY . .\nRUN dotnet publish {{csprojPath}} -r linux-x64 -c Release -o /app --no-restore\nFROM repos.daviviendahn.dvhn/davivienda-banco/dotnet-aspnet:10.0-alpine AS final\nWORKDIR /app\nCOPY --from=build /app .\nENTRYPOINT [\"dotnet\", \"{{assemblyName}}.dll\"]\n"
+  }'
+```
+
+Respuesta (200 OK):
+```json
+{
+  "name": "alpine",
+  "content": "FROM repos.daviviendahn.dvhn/...",
+  "isOverride": true,
+  "lastModifiedAt": "2026-02-19T06:20:00+00:00"
+}
+```
+
+**Importante:** El contenido debe incluir los placeholders `{{csprojPath}}`, `{{csprojDir}}` y `{{assemblyName}}` para que los builds funcionen correctamente.
+
 ---
 
 ## 7. Monitoreo de Builds
 
-### 7.1 Consultar estado de un build
-
-```
-curl http://localhost:5050/api/builds/<BUILD_ID>
-```
-
-Respuesta incluye: estado, error (si fallo), Dockerfile generado, logs, commit SHA, timestamps.
-
-### 7.2 Estados del build
+### 7.1 Estados del build
 
 | Codigo | Estado | Descripcion |
 |--------|--------|-------------|
-| 0 | Queued | En cola, esperando procesamiento |
-| 1 | Cloning | Clonando repositorio |
-| 2 | Building | Construyendo imagen con Buildah |
-| 3 | Pushing | Publicando al Container Registry |
-| 4 | Completed | Exitoso |
-| 5 | Failed | Fallo en algun paso |
-| 6 | Cancelled | Cancelado por el usuario |
+| 0 | `Queued` | En cola, esperando procesamiento |
+| 1 | `Cloning` | Clonando repositorio |
+| 2 | `Building` | Construyendo imagen con Buildah |
+| 3 | `Pushing` | Publicando al Container Registry |
+| 4 | `Completed` | Exitoso |
+| 5 | `Failed` | Fallo en algun paso (ver `errorMessage`) |
+| 6 | `Cancelled` | Cancelado por el usuario |
 
-### 7.3 Logs en tiempo real (Server-Sent Events)
+### 7.2 Flujo tipico de monitoreo
 
-```
-curl -N http://localhost:5050/api/builds/<BUILD_ID>/logs
-```
-
-Esto abre una conexion SSE que envia logs en tiempo real mientras el build esta en progreso. Si el build ya termino, retorna todos los logs como JSON.
-
-### 7.4 Listar builds con filtros
-
-```
-curl "http://localhost:5050/api/builds?page=1&pageSize=10&status=5"
-curl "http://localhost:5050/api/builds?branch=main"
-curl "http://localhost:5050/api/builds?repositoryUrl=https://repos.daviviendahn.dvhn/davivienda-banco/mi-servicio.git"
-```
-
-### 7.5 Cancelar un build en progreso
-
-```
-curl -X DELETE http://localhost:5050/api/builds/<BUILD_ID>
-```
-
-### 7.6 Reintentar un build fallido
-
-```
-curl -X POST http://localhost:5050/api/builds/<BUILD_ID>/retry
-```
+1. Crear build → guardar el `buildId`
+2. Consultar estado periodicamente:
+   ```
+   curl http://localhost:5050/api/builds/<BUILD_ID>
+   ```
+3. O conectarse a logs en tiempo real:
+   ```
+   curl -N http://localhost:5050/api/builds/<BUILD_ID>/logs
+   ```
+4. Cuando `status` sea 4 (Completed): la imagen esta publicada
+5. Si `status` es 5 (Failed): revisar `errorMessage` y `logs`
+6. Si fallo: reintentar con `POST /api/builds/<BUILD_ID>/retry`
 
 ---
 
