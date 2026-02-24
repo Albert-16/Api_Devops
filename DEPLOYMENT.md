@@ -1033,9 +1033,11 @@ Asegurarse de que el usuario que ejecuta la API tenga permisos de escritura.
 
 ---
 
-## Requisitos de los Repositorios
+## Requisitos de los Repositorios (en Gitea)
 
-Para que un repositorio se construya correctamente con DockerizeAPI, debe tener:
+Estos requisitos son para los **repositorios de microservicios en Gitea** que se van a construir con DockerizeAPI (NO son requisitos del servidor donde corre la API).
+
+Para que un repositorio se construya correctamente, debe tener:
 
 ### Obligatorio
 
