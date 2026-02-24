@@ -2,7 +2,7 @@ namespace DockerizeAPI.Models.Enums;
 
 /// <summary>
 /// Nivel de detalle en la salida del proceso de build.
-/// Controla el formato de output de Buildah.
+/// Controla el formato de output de Docker.
 /// </summary>
 public enum ProgressMode
 {

@@ -1,3 +1,4 @@
+using DockerizeAPI.Configuration;
 using DockerizeAPI.Endpoints;
 using DockerizeAPI.Middleware;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -18,8 +19,12 @@ public static class WebApplicationExtensions
         app.UseMiddleware<GlobalExceptionMiddleware>();
         app.UseMiddleware<RequestLoggingMiddleware>();
 
-        // ─── Swagger (solo en Development) ───
-        if (app.Environment.IsDevelopment())
+        // ─── Swagger (configurable desde appsettings.json Server:EnableSwagger) ───
+        ServerSettings serverSettings = app.Configuration
+            .GetSection(ServerSettings.SectionName)
+            .Get<ServerSettings>() ?? new ServerSettings();
+
+        if (serverSettings.EnableSwagger)
         {
             app.UseSwagger();
             app.UseSwaggerUI(options =>

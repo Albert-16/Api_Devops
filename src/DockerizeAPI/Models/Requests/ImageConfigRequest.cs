@@ -5,7 +5,7 @@ namespace DockerizeAPI.Models.Requests;
 
 /// <summary>
 /// Configuración de la imagen Docker a construir.
-/// Controla el template (Alpine/Debian), tags, plataforma y opciones de Buildah.
+/// Controla el template (Alpine/Debian), tags, plataforma y opciones de Docker build.
 /// </summary>
 public sealed record ImageConfigRequest
 {
@@ -36,7 +36,7 @@ public sealed record ImageConfigRequest
     /// <summary>Etiquetas metadata para la imagen (--label KEY=VALUE).</summary>
     public Dictionary<string, string>? Labels { get; init; }
 
-    /// <summary>Tipo de red durante el build. Default: Host (compatible con rootless).</summary>
+    /// <summary>Tipo de red durante el build. Default: Host.</summary>
     public NetworkMode Network { get; init; } = NetworkMode.Host;
 
     /// <summary>Si es true, reconstruye todo desde cero sin cache. Default: false</summary>

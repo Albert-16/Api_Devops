@@ -1,7 +1,7 @@
 # ============================================================
 # DockerizeAPI — Docker Compose
 # Levanta la API de dockerización automatizada.
-# Requiere Docker/Podman con soporte para --privileged o --security-opt.
+# Requiere acceso al Docker socket para construir imágenes.
 # ============================================================
 
 services:
@@ -23,15 +23,12 @@ services:
       # - Build__TimeoutMinutes=10
       # - Build__TempDirectory=/tmp/dockerize-builds
     volumes:
+      # Docker socket para que la API pueda ejecutar docker build/push
+      - /var/run/docker.sock:/var/run/docker.sock
       # Directorio temporal para builds (persistente entre reinicios)
       - build-temp:/tmp/dockerize-builds
       # Logs de la aplicación
       - app-logs:/app/logs
-    # Necesario para que Buildah funcione dentro del contenedor
-    security_opt:
-      - seccomp:unconfined
-    # Alternativa si security_opt no es suficiente:
-    # privileged: true
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health/live"]

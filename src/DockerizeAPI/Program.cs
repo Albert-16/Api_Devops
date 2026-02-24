@@ -1,3 +1,4 @@
+using DockerizeAPI.Configuration;
 using DockerizeAPI.Extensions;
 using Serilog;
 
@@ -15,6 +16,13 @@ try
     // ─── Serilog (reemplaza el logging por defecto) ───
     builder.Host.UseSerilog((context, loggerConfig) =>
         loggerConfig.ReadFrom.Configuration(context.Configuration));
+
+    // ─── Configurar URL del servidor desde appsettings.json ───
+    ServerSettings serverSettings = builder.Configuration
+        .GetSection(ServerSettings.SectionName)
+        .Get<ServerSettings>() ?? new ServerSettings();
+
+    builder.WebHost.UseUrls(serverSettings.Urls);
 
     // ─── Registrar todos los servicios ───
     builder.Services.AddDockerizeServices(builder.Configuration);

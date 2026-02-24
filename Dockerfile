@@ -1,7 +1,7 @@
 # ============================================================
 # DockerizeAPI — Dockerfile Multi-Stage
-# Construye la API y la ejecuta en un contenedor con Buildah instalado.
-# La API necesita Buildah y Git para ejecutar builds de imágenes.
+# Construye la API y la ejecuta en un contenedor con Docker CLI instalado.
+# La API necesita Docker CLI y Git para ejecutar builds de imágenes.
 # ============================================================
 
 # --- STAGE 1: BUILD ---
@@ -24,27 +24,17 @@ RUN dotnet publish DockerizeAPI/DockerizeAPI.csproj \
     --no-restore
 
 # --- STAGE 2: RUNTIME ---
-# Usamos Debian porque Buildah no está disponible en Alpine de forma estable
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 
-# Instalar Buildah, Git y dependencias necesarias
-# El contenedor necesita ejecutar git clone y buildah bud/push
+# Instalar Docker CLI y Git
+# El contenedor necesita ejecutar git clone y docker build/push
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        buildah \
+        docker.io \
         git \
         ca-certificates \
-        fuse-overlayfs \
-        slirp4netns \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
-
-# Configurar Buildah para ejecución rootless dentro de contenedor
-RUN mkdir -p /etc/containers \
-    && echo '[storage]' > /etc/containers/storage.conf \
-    && echo 'driver = "overlay"' >> /etc/containers/storage.conf \
-    && echo '[storage.options.overlay]' >> /etc/containers/storage.conf \
-    && echo 'mount_program = "/usr/bin/fuse-overlayfs"' >> /etc/containers/storage.conf
 
 # Crear directorio temporal para builds
 RUN mkdir -p /tmp/dockerize-builds
@@ -52,9 +42,8 @@ RUN mkdir -p /tmp/dockerize-builds
 # Crear usuario no-root para ejecución segura
 RUN groupadd -r dockerize && useradd -r -g dockerize -m dockerize
 
-# Configurar subuid/subgid para buildah rootless
-RUN echo "dockerize:100000:65536" >> /etc/subuid \
-    && echo "dockerize:100000:65536" >> /etc/subgid
+# Agregar usuario al grupo docker para acceso al socket
+RUN usermod -aG docker dockerize
 
 # Copiar aplicación compilada
 WORKDIR /app

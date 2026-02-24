@@ -1,7 +1,7 @@
 namespace DockerizeAPI.Models.Enums;
 
 /// <summary>
-/// Tipo de red disponible durante la construcción de la imagen con Buildah.
+/// Tipo de red disponible durante la construcción de la imagen con Docker.
 /// Controla el acceso a red del contenedor de build.
 /// </summary>
 public enum NetworkMode

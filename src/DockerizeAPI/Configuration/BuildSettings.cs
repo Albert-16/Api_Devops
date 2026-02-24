@@ -31,9 +31,9 @@ public sealed class BuildSettings
     public string TempDirectory { get; init; } = "/tmp/dockerize-builds";
 
     /// <summary>
-    /// Si true, ejecuta Buildah a través de WSL (Windows Subsystem for Linux).
-    /// Necesario cuando la API corre en Windows pero Buildah está instalado en WSL.
-    /// Default: false (ejecuta Buildah directamente).
+    /// Si true, ejecuta Docker a través de WSL (Windows Subsystem for Linux).
+    /// Necesario cuando la API corre en Windows pero Docker está instalado en WSL.
+    /// Default: false (ejecuta Docker directamente).
     /// </summary>
     public bool UseWsl { get; init; }
 }

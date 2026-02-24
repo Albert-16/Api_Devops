@@ -12,7 +12,7 @@ public enum BuildStatus
     /// <summary>Clonando el repositorio fuente desde Gitea.</summary>
     Cloning = 1,
 
-    /// <summary>Construyendo la imagen con Buildah (incluye generación de Dockerfile, restore y publish).</summary>
+    /// <summary>Construyendo la imagen con Docker (incluye generación de Dockerfile, restore y publish).</summary>
     Building = 2,
 
     /// <summary>Subiendo la imagen construida al Container Registry de Gitea.</summary>

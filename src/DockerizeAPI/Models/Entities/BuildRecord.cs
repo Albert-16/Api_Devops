@@ -78,7 +78,7 @@ public sealed class BuildRecord
     /// <summary>Owner/organización del registry.</summary>
     public string RegistryOwner { get; set; } = "davivienda-banco";
 
-    /// <summary>Argumentos adicionales de build pasados a Buildah.</summary>
+    /// <summary>Argumentos adicionales de build pasados a Docker.</summary>
     public Dictionary<string, string>? BuildArgs { get; set; }
 
     /// <summary>Labels metadata de la imagen.</summary>
@@ -93,7 +93,7 @@ public sealed class BuildRecord
     /// <summary>Si es true, salida mínima del build.</summary>
     public bool Quiet { get; set; }
 
-    /// <summary>Tipo de red durante el build. Default: Host (compatible con rootless).</summary>
+    /// <summary>Tipo de red durante el build. Default: Host.</summary>
     public NetworkMode Network { get; set; } = NetworkMode.Host;
 
     /// <summary>Nivel de detalle del progreso.</summary>

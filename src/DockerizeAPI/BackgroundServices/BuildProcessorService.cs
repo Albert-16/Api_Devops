@@ -12,7 +12,7 @@ namespace DockerizeAPI.BackgroundServices;
 
 /// <summary>
 /// Background service que consume builds del BuildChannel y ejecuta el pipeline completo.
-/// Pipeline: Clone → Detectar .csproj → Generar Dockerfile → Buildah build → Login → Push → Cleanup.
+/// Pipeline: Clone → Detectar .csproj → Generar Dockerfile → Docker build → Login → Push → Cleanup.
 /// Soporta múltiples workers concurrentes controlados por MaxConcurrentBuilds.
 /// Soporta cancelación individual de builds.
 /// </summary>
@@ -22,7 +22,7 @@ public sealed class BuildProcessorService : BackgroundService
     private readonly BuildStore _store;
     private readonly IGitService _gitService;
     private readonly IDockerfileGenerator _dockerfileGenerator;
-    private readonly IBuildahService _buildahService;
+    private readonly IDockerBuildService _dockerBuildService;
     private readonly IBuildLogBroadcaster _broadcaster;
     private readonly BuildSettings _buildSettings;
     private readonly ILogger<BuildProcessorService> _logger;
@@ -36,7 +36,7 @@ public sealed class BuildProcessorService : BackgroundService
         BuildStore store,
         IGitService gitService,
         IDockerfileGenerator dockerfileGenerator,
-        IBuildahService buildahService,
+        IDockerBuildService dockerBuildService,
         IBuildLogBroadcaster broadcaster,
         IOptions<BuildSettings> buildSettings,
         ILogger<BuildProcessorService> logger)
@@ -45,7 +45,7 @@ public sealed class BuildProcessorService : BackgroundService
         _store = store;
         _gitService = gitService;
         _dockerfileGenerator = dockerfileGenerator;
-        _buildahService = buildahService;
+        _dockerBuildService = dockerBuildService;
         _broadcaster = broadcaster;
         _buildSettings = buildSettings.Value;
         _logger = logger;
@@ -186,8 +186,8 @@ public sealed class BuildProcessorService : BackgroundService
             await _broadcaster.BroadcastLogAsync(request.BuildId,
                 "Dockerfile generado y escrito en el workspace", cancellationToken: ct);
 
-            // ─── PASO 4: Buildah build ───
-            var buildOptions = new BuildahBuildOptions
+            // ─── PASO 4: Docker build ───
+            var buildOptions = new DockerBuildOptions
             {
                 Platform = buildRecord?.Platform ?? "linux/amd64",
                 NoCache = buildRecord?.NoCache ?? false,
@@ -198,24 +198,24 @@ public sealed class BuildProcessorService : BackgroundService
                     NetworkMode.Host => "host",
                     NetworkMode.None => "none",
                     NetworkMode.Bridge => "bridge",
-                    _ => null  // No pasar --network, buildah usa su default (compatible con rootless)
+                    _ => null  // No pasar --network, docker usa su default
                 },
                 BuildArgs = BuildMergedBuildArgs(request),
                 Labels = buildRecord?.Labels
             };
 
-            bool buildSuccess = await _buildahService.BuildImageAsync(
+            bool buildSuccess = await _dockerBuildService.BuildImageAsync(
                 workspacePath, dockerfilePath, fullImageTag, request.BuildId, buildOptions, ct);
 
             if (!buildSuccess)
             {
-                throw new InvalidOperationException("Error durante la construcción de la imagen con Buildah.");
+                throw new InvalidOperationException("Error durante la construcción de la imagen con Docker.");
             }
 
             // ─── PASO 5: Login + Push ───
             UpdateBuildStatus(request.BuildId, BuildStatus.Pushing);
 
-            bool loginSuccess = await _buildahService.LoginAsync(
+            bool loginSuccess = await _dockerBuildService.LoginAsync(
                 request.RegistryUrl, "token", request.GitToken, request.BuildId, ct);
 
             if (!loginSuccess)
@@ -223,7 +223,7 @@ public sealed class BuildProcessorService : BackgroundService
                 throw new InvalidOperationException("Autenticación al registry fallida. Verifique el gitToken.");
             }
 
-            bool pushSuccess = await _buildahService.PushImageAsync(fullImageTag, request.BuildId, ct);
+            bool pushSuccess = await _dockerBuildService.PushImageAsync(fullImageTag, request.BuildId, ct);
 
             if (!pushSuccess)
             {
@@ -337,7 +337,7 @@ public sealed class BuildProcessorService : BackgroundService
             // Limpiar imagen local
             try
             {
-                await _buildahService.CleanupImageAsync(fullImageTag, CancellationToken.None);
+                await _dockerBuildService.CleanupImageAsync(fullImageTag, CancellationToken.None);
             }
             catch (Exception ex)
             {

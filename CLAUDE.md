@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Summary
 
-**DockerizeAPI** — Minimal API .NET 10 para construcción y publicación automatizada de imágenes Docker usando **Buildah** (no Docker daemon). Clona repos Git, detecta .csproj, genera Dockerfiles desde plantillas embebidas, y publica al Gitea Container Registry de Davivienda Honduras.
+**DockerizeAPI** — Minimal API .NET 10 para construcción y publicación automatizada de imágenes Docker. Clona repos Git, detecta .csproj, genera Dockerfiles desde plantillas embebidas, y publica al Gitea Container Registry de Davivienda Honduras.
 
 - Solution file: `DockerizeAPI.slnx` (no `.sln`)
 - API runs on `http://localhost:5050` in dev
@@ -50,10 +50,10 @@ HTTP POST /api/builds (202 Accepted)
         2. GitService.DetectCsprojAsync (auto-detect or explicit)
         3. GitService.ExtractAssemblyName (parse XML)
         4. DockerfileGenerator.Generate (template substitution)
-        5. BuildahService.BuildImageAsync (buildah bud)
-        6. BuildahService.LoginAsync (buildah login)
-        7. BuildahService.PushImageAsync (buildah push)
-        8. BuildahService.CleanupImageAsync (buildah rmi)
+        5. DockerBuildService.BuildImageAsync (docker build)
+        6. DockerBuildService.LoginAsync (docker login)
+        7. DockerBuildService.PushImageAsync (docker push)
+        8. DockerBuildService.CleanupImageAsync (docker rmi)
     → BuildLogBroadcaster (SSE streaming en tiempo real)
 ```
 
@@ -83,8 +83,8 @@ In-memory únicamente (`BuildStore`). Sin base de datos. Dos `ConcurrentDictiona
 | Archivo | Propósito |
 |---|---|
 | `src/DockerizeAPI/BackgroundServices/BuildProcessorService.cs` | Ejecutor del pipeline completo |
-| `src/DockerizeAPI/Services/ProcessRunner.cs` | Ejecuta git/buildah con sanitización de tokens |
-| `src/DockerizeAPI/Services/BuildahService.cs` | Wrapper de comandos buildah (incluye WSL path conversion) |
+| `src/DockerizeAPI/Services/ProcessRunner.cs` | Ejecuta git/docker con sanitización de tokens |
+| `src/DockerizeAPI/Services/DockerBuildService.cs` | Wrapper de comandos docker (incluye WSL path conversion) |
 | `src/DockerizeAPI/Services/GitService.cs` | Clone, detección de .csproj, extracción de metadata |
 | `src/DockerizeAPI/Data/BuildStore.cs` | Store in-memory thread-safe |
 | `src/DockerizeAPI/Extensions/ServiceCollectionExtensions.cs` | Registro de DI (todo Singleton) |
@@ -92,7 +92,7 @@ In-memory únicamente (`BuildStore`). Sin base de datos. Dos `ConcurrentDictiona
 
 ## Configuration
 
-**`appsettings.Development.json`** tiene `"UseWsl": true` para ejecutar buildah en Windows via WSL2.
+**`appsettings.Development.json`** tiene `"UseWsl": true` para ejecutar Docker en Windows via WSL2.
 
 **`BuildSettings`** (`Build:` en appsettings):
 - `MaxConcurrentBuilds`: 3
@@ -131,7 +131,6 @@ Placeholders: `{{csprojPath}}`, `{{csprojDir}}`, `{{assemblyName}}`
 
 ## WSL / Windows Notes
 
-- Windows 10 Pro sin Docker/Podman
-- WSL2 requerido para ejecutar buildah localmente
-- Script post-instalación: `scripts/setup-wsl-buildah.sh`
-- En Linux/contenedor: buildah corre directamente sin WSL
+- Windows 10 Pro con Docker Desktop o Docker en WSL2
+- WSL2 opcional para ejecutar Docker desde Windows (configuración `UseWsl`)
+- En Linux/contenedor: Docker corre directamente sin WSL

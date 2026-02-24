@@ -18,6 +18,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddDockerizeServices(this IServiceCollection services, IConfiguration configuration)
     {
         // ─── Options Pattern ───
+        services.Configure<ServerSettings>(configuration.GetSection(ServerSettings.SectionName));
         services.Configure<RegistrySettings>(configuration.GetSection(RegistrySettings.SectionName));
         services.Configure<BuildSettings>(configuration.GetSection(BuildSettings.SectionName));
         services.Configure<OdbcPackagesSettings>(configuration.GetSection(OdbcPackagesSettings.SectionName));
@@ -37,7 +38,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITemplateService, TemplateService>();
         services.AddSingleton<IDockerfileGenerator, DockerfileGenerator>();
         services.AddSingleton<IGitService, GitService>();
-        services.AddSingleton<IBuildahService, BuildahService>();
+        services.AddSingleton<IDockerBuildService, DockerBuildService>();
 
         // ─── Background Service ───
         services.AddHostedService<BuildProcessorService>();
@@ -54,7 +55,7 @@ public static class ServiceCollectionExtensions
                 Title = "DockerizeAPI",
                 Version = "v1",
                 Description = "API REST para construcción y publicación automatizada de imágenes Docker para microservicios .NET de Davivienda Honduras. " +
-                              "Usa Buildah para construir imágenes y el Container Registry de Gitea para publicarlas."
+                              "Usa Docker para construir imágenes y el Container Registry de Gitea para publicarlas."
             });
 
             // Incluir XML comments en Swagger

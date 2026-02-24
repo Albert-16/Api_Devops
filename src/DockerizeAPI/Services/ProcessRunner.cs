@@ -4,7 +4,7 @@ using System.Text;
 namespace DockerizeAPI.Services;
 
 /// <summary>
-/// Ejecuta procesos externos (git, buildah) de forma asíncrona con captura de stdout/stderr,
+/// Ejecuta procesos externos (git, docker) de forma asíncrona con captura de stdout/stderr,
 /// soporte de timeout y callback para streaming de logs en tiempo real.
 /// SEGURIDAD: Nunca loguea tokens ni credenciales en los argumentos.
 /// </summary>
@@ -22,7 +22,7 @@ public sealed class ProcessRunner
     /// Ejecuta un proceso externo y retorna el resultado.
     /// Captura stdout/stderr de forma asíncrona y soporta timeout + cancelación.
     /// </summary>
-    /// <param name="fileName">Ejecutable a invocar (ej: "git", "buildah").</param>
+    /// <param name="fileName">Ejecutable a invocar (ej: "git", "docker").</param>
     /// <param name="arguments">Argumentos del proceso.</param>
     /// <param name="workingDirectory">Directorio de trabajo (null = directorio actual).</param>
     /// <param name="onOutputReceived">Callback invocado por cada línea de stdout (para streaming de logs).</param>
@@ -191,7 +191,7 @@ public sealed class ProcessRunner
             @"(https?://)([^@\s]+)(@)",
             "$1[REDACTED]$3");
 
-        // Ocultar -p password en buildah login
+        // Ocultar -p password en docker login
         sanitized = System.Text.RegularExpressions.Regex.Replace(
             sanitized,
             @"(-p\s+)\S+",

@@ -1,13 +1,13 @@
 namespace DockerizeAPI.Services.Interfaces;
 
 /// <summary>
-/// Contrato para el wrapper de Buildah CLI.
-/// Gestiona construcción, login, push y cleanup de imágenes OCI.
+/// Contrato para el wrapper de Docker CLI.
+/// Gestiona construcción, login, push y cleanup de imágenes Docker.
 /// </summary>
-public interface IBuildahService
+public interface IDockerBuildService
 {
     /// <summary>
-    /// Construye una imagen usando buildah bud con los flags configurados.
+    /// Construye una imagen usando docker build con los flags configurados.
     /// </summary>
     /// <param name="contextPath">Directorio de contexto del build.</param>
     /// <param name="dockerfilePath">Ruta al Dockerfile generado.</param>
@@ -21,11 +21,11 @@ public interface IBuildahService
         string dockerfilePath,
         string fullImageTag,
         Guid buildId,
-        BuildahBuildOptions? options = null,
+        DockerBuildOptions? options = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Autentica contra un container registry usando buildah login.
+    /// Autentica contra un container registry usando docker login.
     /// </summary>
     /// <param name="registryUrl">URL del registry.</param>
     /// <param name="username">Usuario (generalmente "token").</param>
@@ -41,7 +41,7 @@ public interface IBuildahService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Publica una imagen al container registry usando buildah push.
+    /// Publica una imagen al container registry usando docker push.
     /// </summary>
     /// <param name="fullImageTag">Tag completo de la imagen.</param>
     /// <param name="buildId">ID del build para broadcasting de logs.</param>
@@ -61,9 +61,9 @@ public interface IBuildahService
 }
 
 /// <summary>
-/// Opciones adicionales para buildah bud.
+/// Opciones adicionales para docker build.
 /// </summary>
-public sealed class BuildahBuildOptions
+public sealed class DockerBuildOptions
 {
     /// <summary>Plataforma objetivo. Default: "linux/amd64".</summary>
     public string? Platform { get; set; }
