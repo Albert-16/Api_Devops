@@ -23,8 +23,8 @@ COPY . .
 # --- Paso 5: Limpiar archivos temporales ---
 RUN rm -f -r /tmp/*
 
-# --- Paso 6: Compilar y publicar ---
-RUN dotnet publish {{csprojPath}} -r linux-x64 -c Release -o /app --no-restore
+# --- Paso 6: Compilar y publicar la aplicacion ---
+RUN dotnet publish {{csprojPath}} -r linux-x64 -c Release -o /app
 
 # ============================================================
 # STAGE 2: RUNTIME con ODBC (Ejecucion)

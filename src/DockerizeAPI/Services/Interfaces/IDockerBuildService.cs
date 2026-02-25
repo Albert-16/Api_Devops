@@ -15,8 +15,8 @@ public interface IDockerBuildService
     /// <param name="buildId">ID del build para broadcasting de logs.</param>
     /// <param name="options">Opciones adicionales del build.</param>
     /// <param name="cancellationToken">Token de cancelación.</param>
-    /// <returns>true si el build fue exitoso.</returns>
-    Task<bool> BuildImageAsync(
+    /// <exception cref="InvalidOperationException">Si el build falla, incluye stderr para diagnóstico.</exception>
+    Task BuildImageAsync(
         string contextPath,
         string dockerfilePath,
         string fullImageTag,

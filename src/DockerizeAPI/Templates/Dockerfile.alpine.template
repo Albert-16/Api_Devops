@@ -33,8 +33,7 @@ RUN rm -f -r /tmp/*
 # --- Paso 6: Compilar y publicar la aplicacion ---
 # -c Release: Compilacion optimizada para produccion
 # -o /app: Directorio de salida
-# --no-restore: No restaurar de nuevo (ya se hizo en paso 3)
-RUN dotnet publish {{csprojPath}} -r linux-x64 -c Release -o /app --no-restore
+RUN dotnet publish {{csprojPath}} -r linux-x64 -c Release -o /app
 
 # ============================================================
 # STAGE 2: RUNTIME (Ejecucion)

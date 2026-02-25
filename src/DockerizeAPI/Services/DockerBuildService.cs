@@ -32,7 +32,7 @@ public sealed class DockerBuildService : IDockerBuildService
     }
 
     /// <inheritdoc/>
-    public async Task<bool> BuildImageAsync(
+    public async Task BuildImageAsync(
         string contextPath,
         string dockerfilePath,
         string fullImageTag,
@@ -66,15 +66,21 @@ public sealed class DockerBuildService : IDockerBuildService
                 $"Imagen construida exitosamente: {fullImageTag}",
                 cancellationToken: CancellationToken.None);
             _logger.LogInformation("Imagen construida exitosamente: {ImageTag}", fullImageTag);
-            return true;
+            return;
         }
 
-        string errorMessage = ClassifyBuildError(result.StdErr);
+        string classifiedMessage = ClassifyBuildError(result.StdErr);
+        string rawStdErr = result.StdErr.Trim();
+
         await _broadcaster.BroadcastLogAsync(buildId,
-            $"Error al construir imagen: {errorMessage}", "error",
+            $"Error al construir imagen: {classifiedMessage}", "error",
             CancellationToken.None);
-        _logger.LogError("Error al construir imagen {ImageTag}: {Error}", fullImageTag, errorMessage);
-        return false;
+        _logger.LogError("Error al construir imagen {ImageTag}: {Error}. Stderr: {RawStdErr}",
+            fullImageTag, classifiedMessage, rawStdErr);
+
+        // Incluir stderr real en la excepción para diagnóstico
+        throw new InvalidOperationException(
+            $"{classifiedMessage} | stderr: {rawStdErr}");
     }
 
     /// <inheritdoc/>

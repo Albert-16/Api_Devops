@@ -12,7 +12,7 @@ namespace DockerizeAPI.BackgroundServices;
 
 /// <summary>
 /// Background service que consume builds del BuildChannel y ejecuta el pipeline completo.
-/// Pipeline: Clone → Detectar .csproj → Generar Dockerfile → Docker build → Login → Push → Cleanup.
+/// Pipeline: Clone → Detectar .csproj → Generar Dockerfile → Login → Docker build → Push → Cleanup.
 /// Soporta múltiples workers concurrentes controlados por MaxConcurrentBuilds.
 /// Soporta cancelación individual de builds.
 /// </summary>
@@ -193,7 +193,16 @@ public sealed class BuildProcessorService : BackgroundService
             await _broadcaster.BroadcastLogAsync(request.BuildId,
                 "Dockerfile generado y escrito en el workspace", cancellationToken: ct);
 
-            // ─── PASO 4: Docker build ───
+            // ─── PASO 4: Login al registry (necesario antes del build para pull de imágenes base privadas) ───
+            bool loginSuccess = await _dockerBuildService.LoginAsync(
+                request.RegistryUrl, "token", request.GitToken, request.BuildId, ct);
+
+            if (!loginSuccess)
+            {
+                throw new InvalidOperationException("Autenticación al registry fallida. Verifique el gitToken.");
+            }
+
+            // ─── PASO 5: Docker build ───
             var buildOptions = new DockerBuildOptions
             {
                 Platform = buildRecord?.Platform ?? "linux/amd64",
@@ -211,24 +220,12 @@ public sealed class BuildProcessorService : BackgroundService
                 Labels = buildRecord?.Labels
             };
 
-            bool buildSuccess = await _dockerBuildService.BuildImageAsync(
+            // BuildImageAsync lanza excepción con stderr si falla
+            await _dockerBuildService.BuildImageAsync(
                 workspacePath, dockerfilePath, fullImageTag, request.BuildId, buildOptions, ct);
 
-            if (!buildSuccess)
-            {
-                throw new InvalidOperationException("Error durante la construcción de la imagen con Docker.");
-            }
-
-            // ─── PASO 5: Login + Push ───
+            // ─── PASO 6: Push ───
             UpdateBuildStatus(request.BuildId, BuildStatus.Pushing);
-
-            bool loginSuccess = await _dockerBuildService.LoginAsync(
-                request.RegistryUrl, "token", request.GitToken, request.BuildId, ct);
-
-            if (!loginSuccess)
-            {
-                throw new InvalidOperationException("Autenticación al registry fallida. Verifique el gitToken.");
-            }
 
             bool pushSuccess = await _dockerBuildService.PushImageAsync(fullImageTag, request.BuildId, ct);
 
@@ -237,7 +234,7 @@ public sealed class BuildProcessorService : BackgroundService
                 throw new InvalidOperationException("Error al publicar la imagen al registry.");
             }
 
-            // ─── PASO 6: Completar ───
+            // ─── PASO 7: Completar ───
             stopwatch.Stop();
 
             _store.UpdateBuild(request.BuildId, b =>
