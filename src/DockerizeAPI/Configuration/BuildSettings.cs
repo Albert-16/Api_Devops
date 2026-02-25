@@ -44,6 +44,13 @@ public sealed class BuildSettings
     /// Default: false (ejecuta Docker directamente).
     /// </summary>
     public bool UseWsl { get; init; }
+
+    /// <summary>
+    /// Si true, elimina la imagen local después de hacer push al registry.
+    /// Útil para ahorrar espacio en disco en servidores de build.
+    /// Default: true (limpia imágenes automáticamente).
+    /// </summary>
+    public bool CleanupAfterPush { get; init; } = true;
 }
 
 /// <summary>

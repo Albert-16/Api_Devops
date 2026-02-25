@@ -338,14 +338,17 @@ public sealed class BuildProcessorService : BackgroundService
                 _logger.LogWarning(ex, "Error limpiando workspace {Path}", workspacePath);
             }
 
-            // Limpiar imagen local
-            try
+            // Limpiar imagen local (solo si está habilitado)
+            if (_buildSettings.CleanupAfterPush)
             {
-                await _dockerBuildService.CleanupImageAsync(fullImageTag, CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error limpiando imagen local {ImageTag}", fullImageTag);
+                try
+                {
+                    await _dockerBuildService.CleanupImageAsync(fullImageTag, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error limpiando imagen local {ImageTag}", fullImageTag);
+                }
             }
 
             _store.AddLog(request.BuildId, new BuildLog
