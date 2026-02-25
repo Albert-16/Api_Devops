@@ -31,6 +31,14 @@ public sealed class BuildSettings
     public string TempDirectory { get; init; } = "/tmp/dockerize-builds";
 
     /// <summary>
+    /// Ruta al directorio con archivos compartidos de soporte para el build
+    /// (certificados CA, nuget.config, wget .debs).
+    /// Estos archivos se copian al workspace antes del docker build.
+    /// Default: /usr/share/containershareds
+    /// </summary>
+    public string SharedFilesPath { get; init; } = "/usr/share/containershareds";
+
+    /// <summary>
     /// Si true, ejecuta Docker a través de WSL (Windows Subsystem for Linux).
     /// Necesario cuando la API corre en Windows pero Docker está instalado en WSL.
     /// Default: false (ejecuta Docker directamente).

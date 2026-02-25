@@ -9,14 +9,13 @@ WORKDIR /src
 # --- Paso 1: Copiar dependencias y certificados ---
 # Se copian PRIMERO los archivos de dependencias para aprovechar cache.
 # Si las dependencias no cambian, el restore se reutiliza del cache.
-COPY .tmp/nuget/ ./.tmp/nuget/
-COPY .tmp/certificates/ca/ /tmp/certificates/ca/
-COPY nuget.config ./
+COPY .tmp/certificate/ca/ /tmp/certificate/ca/
+COPY .tmp/nuget/nuget.config ./nuget.config
 COPY {{csprojPath}} ./{{csprojDir}}
 
 # --- Paso 2: Instalar certificado CA corporativo de Davivienda ---
 # Necesario para que dotnet restore pueda descargar paquetes de feeds HTTPS internos
-RUN cat /tmp/certificates/ca/ca-davivienda.crt >> /etc/ssl/certs/ca-certificates.crt
+RUN cat /tmp/certificate/ca/ca-davivienda.crt >> /etc/ssl/certs/ca-certificates.crt
 
 # --- Paso 3: Restaurar dependencias NuGet ---
 # Usa el nuget.config personalizado que incluye los feeds internos
@@ -45,8 +44,8 @@ FROM repos.daviviendahn.dvhn/davivienda-banco/dotnet-aspnet:10.0-alpine AS final
 
 # --- Instalar certificado CA corporativo ---
 # Tambien necesario en runtime para llamadas HTTPS a servicios internos
-COPY .tmp/certificates/ca/ /tmp/certificates/ca/
-RUN cat /tmp/certificates/ca/ca-davivienda.crt >> /etc/ssl/certs/ca-certificates.crt \
+COPY .tmp/certificate/ca/ /tmp/certificate/ca/
+RUN cat /tmp/certificate/ca/ca-davivienda.crt >> /etc/ssl/certs/ca-certificates.crt \
     && rm -rf /tmp/*
 
 # --- Copiar aplicacion compilada desde Stage 1 ---

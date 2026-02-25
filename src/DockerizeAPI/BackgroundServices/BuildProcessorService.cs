@@ -23,6 +23,7 @@ public sealed class BuildProcessorService : BackgroundService
     private readonly IGitService _gitService;
     private readonly IDockerfileGenerator _dockerfileGenerator;
     private readonly IDockerBuildService _dockerBuildService;
+    private readonly ISharedFilesService _sharedFilesService;
     private readonly IBuildLogBroadcaster _broadcaster;
     private readonly BuildSettings _buildSettings;
     private readonly ILogger<BuildProcessorService> _logger;
@@ -37,6 +38,7 @@ public sealed class BuildProcessorService : BackgroundService
         IGitService gitService,
         IDockerfileGenerator dockerfileGenerator,
         IDockerBuildService dockerBuildService,
+        ISharedFilesService sharedFilesService,
         IBuildLogBroadcaster broadcaster,
         IOptions<BuildSettings> buildSettings,
         ILogger<BuildProcessorService> logger)
@@ -46,6 +48,7 @@ public sealed class BuildProcessorService : BackgroundService
         _gitService = gitService;
         _dockerfileGenerator = dockerfileGenerator;
         _dockerBuildService = dockerBuildService;
+        _sharedFilesService = sharedFilesService;
         _broadcaster = broadcaster;
         _buildSettings = buildSettings.Value;
         _logger = logger;
@@ -168,6 +171,10 @@ public sealed class BuildProcessorService : BackgroundService
                 b.CsprojPath = csprojPath;
                 b.AssemblyName = resolvedAssemblyName;
             });
+
+            // ─── PASO 2.5: Copiar shared files al workspace ───
+            await _sharedFilesService.CopyToWorkspaceAsync(
+                workspacePath, request.IncludeOdbcDependencies, request.BuildId, ct);
 
             // ─── PASO 3: Generar Dockerfile ───
             UpdateBuildStatus(request.BuildId, BuildStatus.Building);

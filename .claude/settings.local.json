@@ -44,7 +44,8 @@
       "Bash(cmd.exe /c \"del D:\\\\Proyectos\\\\Api_Devops\\\\null\")",
       "Bash(git:*)",
       "Bash(pkill:*)",
-      "Bash(MSYS_NO_PATHCONV=1 wsl bash:*)"
+      "Bash(MSYS_NO_PATHCONV=1 wsl bash:*)",
+      "Bash(cd /d/Proyectos/Api_Devops/src/DockerizeAPI && ASPNETCORE_ENVIRONMENT=Development dotnet run 2>&1)"
     ]
   }
 }

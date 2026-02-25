@@ -39,6 +39,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDockerfileGenerator, DockerfileGenerator>();
         services.AddSingleton<IGitService, GitService>();
         services.AddSingleton<IDockerBuildService, DockerBuildService>();
+        services.AddSingleton<ISharedFilesService, SharedFilesService>();
 
         // ─── Background Service ───
         services.AddHostedService<BuildProcessorService>();
@@ -55,7 +56,7 @@ public static class ServiceCollectionExtensions
                 Title = "DockerizeAPI",
                 Version = "v1",
                 Description = "API REST para construcción y publicación automatizada de imágenes Docker para microservicios .NET de Davivienda Honduras. " +
-                              "Usa Docker para construir imágenes y el Container Registry de Gitea para publicarlas."
+                              "Usa Docker para construir imágenes y el Container Registry de Gitea para publicarlas. by Innovaciones Transversales"
             });
 
             // Incluir XML comments en Swagger

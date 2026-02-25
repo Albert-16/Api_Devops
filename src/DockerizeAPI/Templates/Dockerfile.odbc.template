@@ -7,13 +7,12 @@ FROM repos.daviviendahn.dvhn/davivienda-banco/dotnet-sdk:10.0 AS build
 WORKDIR /src
 
 # --- Paso 1: Copiar dependencias y certificados ---
-COPY .tmp/nuget/ ./.tmp/nuget/
-COPY .tmp/certificates/ca/ /tmp/certificates/ca/
-COPY nuget.config ./
+COPY .tmp/certificate/ca/ /tmp/certificate/ca/
+COPY .tmp/nuget/nuget.config ./nuget.config
 COPY {{csprojPath}} ./{{csprojDir}}
 
 # --- Paso 2: Instalar certificado CA corporativo ---
-RUN cat /tmp/certificates/ca/ca-davivienda.crt >> /etc/ssl/certs/ca-certificates.crt
+RUN cat /tmp/certificate/ca/ca-davivienda.crt >> /etc/ssl/certs/ca-certificates.crt
 
 # --- Paso 3: Restaurar dependencias NuGet ---
 RUN dotnet restore {{csprojPath}} -r linux-x64 --configfile ./nuget.config
@@ -38,7 +37,7 @@ FROM repos.daviviendahn.dvhn/davivienda-banco/dotnet-aspnet:10.0 AS final
 ARG REPO_TOKEN
 
 # --- Copiar certificados y herramienta wget ---
-COPY .tmp/certificates/ca/ /tmp/certificates/ca/
+COPY .tmp/certificate/ca/ /tmp/certificate/ca/
 COPY .tmp/wget/ /tmp/wget/
 
 # --- Instalar certificado CA + wget + configurar repositorio Debian de Gitea ---
@@ -49,7 +48,7 @@ COPY .tmp/wget/ /tmp/wget/
 #   3. Descargar la key publica del repositorio Debian de Gitea
 #   4. Configurar autenticacion al repositorio Debian
 #   5. Agregar el repositorio Debian de Gitea como fuente de paquetes
-RUN cat /tmp/certificates/ca/ca-davivienda.crt >> /etc/ssl/certs/ca-certificates.crt \
+RUN cat /tmp/certificate/ca/ca-davivienda.crt >> /etc/ssl/certs/ca-certificates.crt \
     && dpkg -i /tmp/wget/*.deb || true \
     && mkdir -p /etc/apt/keyrings \
     && wget --header "Authorization: token $REPO_TOKEN" \
