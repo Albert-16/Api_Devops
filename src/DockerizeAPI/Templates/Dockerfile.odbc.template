@@ -40,25 +40,24 @@ ARG REPO_TOKEN
 COPY .tmp/certificate/ca/ /tmp/certificate/ca/
 COPY .tmp/wget/ /tmp/wget/
 
-# --- Instalar certificado CA + wget + configurar repositorio Debian de Gitea ---
-# Se consolidan en un solo RUN para reducir layers y tamano de imagen.
-# Pasos internos:
-#   1. Instalar certificado CA de Davivienda
-#   2. Instalar wget desde .deb local (necesario para descargar la key del repo)
-#   3. Descargar la key publica del repositorio Debian de Gitea
-#   4. Configurar autenticacion al repositorio Debian
-#   5. Agregar el repositorio Debian de Gitea como fuente de paquetes
-RUN cat /tmp/certificate/ca/ca-davivienda.crt >> /etc/ssl/certs/ca-certificates.crt \
-    && dpkg -i /tmp/wget/*.deb || true \
-    && mkdir -p /etc/apt/keyrings \
-    && wget --header "Authorization: token $REPO_TOKEN" \
-       -O /etc/apt/keyrings/gitea-Davivienda-Banco.asc \
-       https://repos.daviviendahn.dvhn/api/packages/Davivienda-Banco/debian/repository.key \
-    && echo "machine repos.daviviendahn.dvhn login token password ${REPO_TOKEN}" \
-       > /etc/apt/auth.conf.d/gitea.conf \
-    && chmod 600 /etc/apt/auth.conf.d/gitea.conf \
-    && echo "deb [signed-by=/etc/apt/keyrings/gitea-Davivienda-Banco.asc] https://repos.daviviendahn.dvhn/api/packages/Davivienda-Banco/debian bookworm main" \
-       > /etc/apt/sources.list.d/gitea-davivienda.list
+# --- Paso 1: Instalar certificado CA corporativo ---
+RUN cat /tmp/certificate/ca/ca-davivienda.crt >> /etc/ssl/certs/ca-certificates.crt
+
+# --- Paso 2: Instalar wget desde .deb local ---
+RUN dpkg -i /tmp/wget/*.deb || true
+
+# --- Paso 3: Descargar key del repositorio Debian de Gitea ---
+RUN mkdir -p /etc/apt/keyrings
+RUN wget --header "Authorization: token $REPO_TOKEN" \
+    -O /etc/apt/keyrings/gitea-Davivienda-Banco.asc \
+    https://repos.daviviendahn.dvhn/api/packages/Davivienda-Banco/debian/repository.key
+
+# --- Paso 4: Configurar autenticacion y fuente de paquetes ---
+RUN echo "machine repos.daviviendahn.dvhn login token password ${REPO_TOKEN}" \
+    > /etc/apt/auth.conf.d/gitea.conf \
+    && chmod 600 /etc/apt/auth.conf.d/gitea.conf
+RUN echo "deb [signed-by=/etc/apt/keyrings/gitea-Davivienda-Banco.asc] https://repos.daviviendahn.dvhn/api/packages/Davivienda-Banco/debian bookworm main" \
+    > /etc/apt/sources.list.d/gitea-davivienda.list
 
 # --- Instalar drivers ODBC ---
 # Paquetes necesarios para conectarse a bases de datos via ODBC:
