@@ -44,6 +44,7 @@ public static class WebApplicationExtensions
 
         // ─── Endpoints ───
         app.MapBuildEndpoints();
+        app.MapDeployEndpoints();
         app.MapTemplateEndpoints();
         app.MapHealthEndpoints();
 

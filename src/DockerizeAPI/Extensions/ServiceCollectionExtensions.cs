@@ -22,16 +22,18 @@ public static class ServiceCollectionExtensions
         services.Configure<RegistrySettings>(configuration.GetSection(RegistrySettings.SectionName));
         services.Configure<BuildSettings>(configuration.GetSection(BuildSettings.SectionName));
         services.Configure<OdbcPackagesSettings>(configuration.GetSection(OdbcPackagesSettings.SectionName));
+        services.Configure<DeploySettings>(configuration.GetSection(DeploySettings.SectionName));
 
-        // ─── Data Store (Singleton — en memoria) ───
+        // ─── Data Stores (Singleton — en memoria) ───
         services.AddSingleton<BuildStore>();
+        services.AddSingleton<DeployStore>();
 
-        // ─── Servicios Singleton ───
+        // ─── Servicios Singleton (Build) ───
         services.AddSingleton<ProcessRunner>();
         services.AddSingleton<BuildChannel>();
         services.AddSingleton<IBuildLogBroadcaster, BuildLogBroadcaster>();
 
-        // ─── Servicios Singleton ───
+        // ─── Servicios Singleton (Build) ───
         // Registrados como Singleton porque son stateless y thread-safe,
         // y son consumidos por BuildProcessorService (HostedService/Singleton).
         services.AddSingleton<IBuildService, BuildService>();
@@ -41,8 +43,15 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDockerBuildService, DockerBuildService>();
         services.AddSingleton<ISharedFilesService, SharedFilesService>();
 
-        // ─── Background Service ───
+        // ─── Servicios Singleton (Deploy) ───
+        services.AddSingleton<DeployChannel>();
+        services.AddSingleton<IDeployLogBroadcaster, DeployLogBroadcaster>();
+        services.AddSingleton<IDockerRunService, DockerRunService>();
+        services.AddSingleton<IDeployService, DeployService>();
+
+        // ─── Background Services ───
         services.AddHostedService<BuildProcessorService>();
+        services.AddHostedService<DeployProcessorService>();
 
         // ─── Health Checks ───
         services.AddHealthChecks();

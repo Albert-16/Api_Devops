@@ -2,19 +2,20 @@ using System.Net;
 using System.Net.Http.Json;
 using DockerizeAPI.Models.Requests;
 using DockerizeAPI.Models.Responses;
-using Microsoft.AspNetCore.Mvc.Testing;
+using DockerizeAPI.Tests.Fixtures;
 
 namespace DockerizeAPI.Tests.Endpoints;
 
 /// <summary>
 /// Tests de integración para BuildEndpoints.
-/// Usa WebApplicationFactory para tests contra la API real en memoria.
+/// Usa CustomWebApplicationFactory compartida vía Collection para evitar conflictos de puertos.
 /// </summary>
-public sealed class BuildEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
+[Collection("Integration")]
+public sealed class BuildEndpointsTests
 {
     private readonly HttpClient _client;
 
-    public BuildEndpointsTests(WebApplicationFactory<Program> factory)
+    public BuildEndpointsTests(CustomWebApplicationFactory factory)
     {
         _client = factory.CreateClient();
     }

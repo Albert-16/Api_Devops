@@ -3,9 +3,18 @@ using DockerizeAPI.Extensions;
 using Serilog;
 
 // ─── Bootstrap Logger (antes de que la app se configure) ───
-Log.Logger = new LoggerConfiguration()
-    .WriteTo.Console()
-    .CreateBootstrapLogger();
+// Se usa try-catch para evitar "logger already frozen" al ejecutar tests
+// con WebApplicationFactory que re-invoca Program.Main múltiples veces.
+try
+{
+    Log.Logger = new LoggerConfiguration()
+        .WriteTo.Console()
+        .CreateBootstrapLogger();
+}
+catch (InvalidOperationException)
+{
+    // Logger ya frozen por otra instancia (tests de integración)
+}
 
 try
 {
