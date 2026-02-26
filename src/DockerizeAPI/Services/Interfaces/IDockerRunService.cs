@@ -116,8 +116,8 @@ public sealed record DockerRunOptions
     /// <summary>Política de reinicio (--restart). Ejemplo: "no", "always", "unless-stopped", "on-failure:3".</summary>
     public string RestartPolicy { get; init; } = "no";
 
-    /// <summary>Red Docker (--network).</summary>
-    public string Network { get; init; } = "bridge";
+    /// <summary>Red Docker (--network). null = no se agrega el flag.</summary>
+    public string? Network { get; init; }
 
     /// <summary>Mapeo de puertos (-p). Ejemplo: ["8080:80", "443:443"].</summary>
     public IReadOnlyList<string> Ports { get; init; } = [];

@@ -13,13 +13,12 @@ public sealed class DockerRunServiceTests
     [Fact]
     public void BuildDockerRunArguments_Basico_GeneraComandoCorrecto()
     {
-        // Arrange
+        // Arrange — sin network, genera comando mínimo
         var options = new DockerRunOptions
         {
             ImageName = "repos.dvhn/org/myapp:latest",
             ContainerName = "myapp",
-            Detached = true,
-            Network = "bridge"
+            Detached = true
         };
 
         // Act
@@ -29,14 +28,14 @@ public sealed class DockerRunServiceTests
         Assert.StartsWith("run", result);
         Assert.Contains("-d", result);
         Assert.Contains("--name myapp", result);
-        Assert.Contains("--network bridge", result);
+        Assert.DoesNotContain("--network", result);
         Assert.EndsWith("repos.dvhn/org/myapp:latest", result);
     }
 
     [Fact]
     public void BuildDockerRunArguments_ConPuertos_AgregaFlagP()
     {
-        // Arrange
+        // Arrange — sin network, ports se agregan directamente
         var options = new DockerRunOptions
         {
             ImageName = "myapp:latest",
@@ -50,6 +49,7 @@ public sealed class DockerRunServiceTests
         // Assert
         Assert.Contains("-p 8080:80", result);
         Assert.Contains("-p 443:443", result);
+        Assert.DoesNotContain("--network", result);
     }
 
     [Fact]
@@ -151,17 +151,16 @@ public sealed class DockerRunServiceTests
     }
 
     [Fact]
-    public void BuildDockerRunArguments_Completo_GeneraComandoCompleto()
+    public void BuildDockerRunArguments_Completo_ConPuertos_SinNetwork()
     {
-        // Arrange
+        // Arrange — ports sin network explícito, no agrega --network
         var options = new DockerRunOptions
         {
             ImageName = "repos.dvhn/org/ms23:sapp-dev",
             ContainerName = "ms23-auth",
             Detached = true,
             RestartPolicy = "unless-stopped",
-            Network = "host",
-            Ports = ["8080:80"],
+            Ports = ["3050:8080"],
             Volumes = ["/data:/app/data"],
             EnvironmentVariables = new Dictionary<string, string> { ["ENV"] = "production" }
         };
@@ -172,12 +171,30 @@ public sealed class DockerRunServiceTests
         // Assert
         Assert.StartsWith("run -d", result);
         Assert.Contains("--name ms23-auth", result);
-        Assert.Contains("-p 8080:80", result);
+        Assert.Contains("-p 3050:8080", result);
         Assert.Contains("-v /data:/app/data", result);
         Assert.Contains("-e \"ENV=production\"", result);
         Assert.Contains("--restart unless-stopped", result);
-        Assert.Contains("--network host", result);
+        Assert.DoesNotContain("--network", result);
         Assert.EndsWith("repos.dvhn/org/ms23:sapp-dev", result);
+    }
+
+    [Fact]
+    public void BuildDockerRunArguments_ConNetworkExplicito_AgregaFlag()
+    {
+        // Arrange — network explícito se agrega al comando
+        var options = new DockerRunOptions
+        {
+            ImageName = "repos.dvhn/org/ms23:sapp-dev",
+            ContainerName = "ms23-auth",
+            Network = "host"
+        };
+
+        // Act
+        string result = DockerRunService.BuildDockerRunArguments(options);
+
+        // Assert
+        Assert.Contains("--network host", result);
     }
 
     // ─── RestartPolicyToString Tests ───

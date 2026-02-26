@@ -71,15 +71,14 @@ public sealed class DeployEndpointsTests
     [Fact]
     public async Task CreateDeploy_ConPuertosYVolumenes_RetornaAccepted()
     {
-        // Arrange
+        // Arrange — ports sin network (Docker usa bridge por defecto)
         var request = new CreateDeployRequest
         {
             ImageName = "repos.dvhn/org/ms24-payments:latest",
             GitToken = "test-token-12345",
             ContainerName = "ms24-payments-test",
-            Ports = ["8080:80", "443:443"],
+            Ports = ["3050:8080", "443:443"],
             Volumes = ["/data:/app/data"],
-            Network = "host",
             RestartPolicy = RestartPolicy.UnlessStopped,
             EnvironmentVariables = new Dictionary<string, string>
             {

@@ -111,13 +111,11 @@ POST /api/deploys
   "imageName": "repos.daviviendahn.dvhn/davivienda-banco/ms23-auth:v1.0.0",
   "gitToken": "tu-token-gitea",
   "containerName": "ms23-auth",
-  "ports": ["8080:80", "443:443"],
   "volumes": ["/host/data:/app/data", "/host/logs:/app/logs"],
   "environmentVariables": {
     "ASPNETCORE_ENVIRONMENT": "Production",
     "ConnectionStrings__Default": "Server=db;Database=auth;..."
   },
-  "network": "bridge",
   "restartPolicy": "UnlessStopped",
   "onFailureMaxRetries": 3,
   "detached": true,
@@ -151,11 +149,37 @@ POST /api/deploys
 | `ports` | string[] | No | `[]` | Mapeo de puertos `"host:container"` |
 | `volumes` | string[] | No | `[]` | Montajes de volumenes `"/host:/container"` |
 | `environmentVariables` | object | No | `{}` | Variables de entorno clave-valor |
-| `network` | string | No | `"bridge"` | Red Docker (`bridge`, `host`, `none`, o nombre custom) |
-| `restartPolicy` | enum | No | `"No"` | Politica de reinicio: `No`, `Always`, `UnlessStopped`, `OnFailure` |
+| `network` | string? | No | `null` | Red Docker (`--network`). Si no se especifica, no se agrega el flag |
+| `restartPolicy` | enum | No | `"Always"` | Politica de reinicio: `No`, `Always`, `UnlessStopped`, `OnFailure` |
 | `onFailureMaxRetries` | int | No | `0` | Reintentos maximos para politica `OnFailure` |
 | `detached` | bool | No | `true` | Ejecutar en modo detached (`-d`) |
 | `interactive` | bool | No | `false` | Ejecutar en modo interactivo (`-i`) |
+
+### Network y Ports
+
+`network` es opcional. Si no se especifica, no se agrega `--network` al comando `docker run` y Docker usa su default (bridge). La idea es simple: **si mandas `ports`, no necesitas especificar `network`**. Los campos son independientes y mapean directamente a flags de `docker run`.
+
+```bash
+# Con puertos — controlas en que puerto del host escucha (3050:8080 = host:container)
+{
+  "containerName": "ms23-auth",
+  "ports": ["3050:8080"]
+}
+# Genera: docker run -d --name ms23-auth -p 3050:8080 imagen
+
+# Con network host — el container usa la red del host directamente, sin mapeo
+{
+  "containerName": "ms23-auth",
+  "network": "host"
+}
+# Genera: docker run -d --name ms23-auth --network host imagen
+
+# Sin ports ni network — sin flags de red
+{
+  "containerName": "ms23-auth"
+}
+# Genera: docker run -d --name ms23-auth imagen
+```
 
 ### Ciclo de vida del deploy
 
@@ -326,13 +350,13 @@ curl -X POST http://localhost:5050/api/builds \
 curl -N http://localhost:5050/api/builds/aaa-bbb-ccc/logs
 
 # 3. Cuando el build termine (status: Completed), desplegar
+#    network: host por default — la app escucha directamente en el puerto del host
 curl -X POST http://localhost:5050/api/deploys \
   -H "Content-Type: application/json" \
   -d '{
     "imageName": "repos.daviviendahn.dvhn/davivienda-banco/ms23-auth:latest",
     "gitToken": "tu-token",
     "containerName": "ms23-auth",
-    "ports": ["8081:80"],
     "restartPolicy": "UnlessStopped"
   }'
 # Respuesta: { "deployId": "ddd-eee-fff", "status": "Queued", ... }
@@ -351,7 +375,6 @@ curl -X POST http://localhost:5050/api/deploys \
     "imageName": "repos.daviviendahn.dvhn/davivienda-banco/ms23-auth:v2.0.0",
     "gitToken": "tu-token",
     "containerName": "ms23-auth",
-    "ports": ["8081:80"],
     "restartPolicy": "UnlessStopped"
   }'
 # deployVersion: 2, previousImageName: "...ms23-auth:latest"

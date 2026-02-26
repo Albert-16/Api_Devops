@@ -174,6 +174,12 @@ public sealed class DeployProcessorService : BackgroundService
             // Construir opciones de docker run
             DockerRunOptions runOptions = BuildRunOptions(deployRecord);
 
+            // Loguear el comando generado para verificación
+            string dockerCommand = $"docker {DockerRunService.BuildDockerRunArguments(runOptions)}";
+            await _broadcaster.BroadcastLogAsync(request.DeployId,
+                $"Comando: {dockerCommand}", cancellationToken: ct);
+            _logger.LogInformation("Deploy {DeployId} comando: {DockerCommand}", request.DeployId, dockerCommand);
+
             // Ejecutar docker run
             string? containerId = await _dockerRunService.RunContainerAsync(runOptions, request.DeployId, ct);
 
@@ -351,6 +357,10 @@ public sealed class DeployProcessorService : BackgroundService
             {
                 ImageName = previousImage
             };
+
+            string rollbackCommand = $"docker {DockerRunService.BuildDockerRunArguments(rollbackOptions)}";
+            await _broadcaster.BroadcastLogAsync(request.DeployId,
+                $"Comando rollback: {rollbackCommand}", cancellationToken: CancellationToken.None);
 
             string? rollbackContainerId = await _dockerRunService.RunContainerAsync(rollbackOptions, request.DeployId, ct);
 

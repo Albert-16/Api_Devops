@@ -39,13 +39,13 @@ public sealed class DeployRecord
     public bool Interactive { get; set; }
 
     /// <summary>Política de reinicio del container.</summary>
-    public RestartPolicy RestartPolicy { get; set; } = RestartPolicy.No;
+    public RestartPolicy RestartPolicy { get; set; } = RestartPolicy.Always;
 
     /// <summary>Número máximo de reintentos para política OnFailure.</summary>
     public int OnFailureMaxRetries { get; set; }
 
-    /// <summary>Red Docker a la que se conecta el container.</summary>
-    public string Network { get; set; } = "bridge";
+    /// <summary>Red Docker (--network). null = no se agrega el flag, Docker usa su default.</summary>
+    public string? Network { get; set; }
 
     /// <summary>Mapeo de puertos host:container. Ejemplo: ["8080:80", "443:443"]</summary>
     public List<string> Ports { get; set; } = [];
