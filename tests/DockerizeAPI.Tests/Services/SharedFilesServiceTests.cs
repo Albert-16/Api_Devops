@@ -98,7 +98,7 @@ public sealed class SharedFilesServiceTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(wgetDir, "wget.deb"), "DEB1");
         await File.WriteAllTextAsync(Path.Combine(wgetDir, "libssl.deb"), "DEB2");
 
-        // .deb suelto en root
+        // .deb suelto en root — NO debe copiarse (solo se lee de wget/)
         await File.WriteAllTextAsync(Path.Combine(_sharedFilesDir, "extra.deb"), "DEB3");
 
         SharedFilesService sut = CreateService();
@@ -112,7 +112,7 @@ public sealed class SharedFilesServiceTests : IDisposable
         Assert.True(Directory.Exists(destWget));
         Assert.True(File.Exists(Path.Combine(destWget, "wget.deb")));
         Assert.True(File.Exists(Path.Combine(destWget, "libssl.deb")));
-        Assert.True(File.Exists(Path.Combine(destWget, "extra.deb")));
+        Assert.False(File.Exists(Path.Combine(destWget, "extra.deb")));
     }
 
     [Fact]

@@ -101,14 +101,6 @@ public sealed class SharedFilesService : ISharedFilesService
                 }
             }
 
-            // Copiar archivos .deb sueltos del root
-            foreach (string debFile in Directory.GetFiles(sharedPath, "*.deb"))
-            {
-                string destFile = Path.Combine(wgetDest, Path.GetFileName(debFile));
-                File.Copy(debFile, destFile, overwrite: true);
-                copiedCount++;
-            }
-
             await _broadcaster.BroadcastLogAsync(buildId,
                 $"wget/ODBC: {copiedCount} archivo(s) copiados a .tmp/wget/", cancellationToken: cancellationToken);
         }
