@@ -62,10 +62,9 @@ public static class ServiceCollectionExtensions
         {
             options.SwaggerDoc("v1", new()
             {
-                Title = "DockerizeAPI",
+                Title = "Hefesto Forge",
                 Version = "v1",
-                Description = "API REST para construcción y publicación automatizada de imágenes Docker para microservicios .NET de Davivienda Honduras. " +
-                              "Usa Docker para construir imágenes y el Container Registry de Gitea para publicarlas. by Innovaciones Transversales"
+                Description = "Where containers are born in fire... by Innovaciones Transversales"
             });
 
             // Incluir XML comments en Swagger
