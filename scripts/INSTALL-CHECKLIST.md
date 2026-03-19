@@ -3,6 +3,7 @@
 > **Prerequisito**: Acceso SSH con `sudo`.
 > **Nota**: RHEL usa Podman emulando Docker (`docker` → `podman`). El servicio corre como `root`
 > para evitar problemas de visibilidad de contenedores entre usuarios.
+> **.NET 10** debe estar instalado en el servidor (`dotnet --version` → 10.x).
 
 ---
 
@@ -10,14 +11,14 @@
 
 ```bash
 cat /etc/redhat-release        # RHEL 8+
-sudo dnf install -y git curl tar
+dotnet --version               # 10.x
+docker --version               # Podman emulando Docker o Docker CE
+git --version
 ```
 
+- [ ] .NET 10 instalado
+- [ ] Docker/Podman disponible
 - [ ] Git instalado
-- [ ] `docker --version` responde (Podman emulando Docker o Docker CE)
-
-> **.NET Runtime**: Solo si se publica framework-dependent.
-> Con self-contained no se necesita .NET en el servidor.
 
 ---
 
@@ -66,7 +67,14 @@ sudo restorecon -Rv /usr/share/containershareds
 Desde la maquina de desarrollo:
 
 ```bash
-dotnet publish src/DockerizeAPI/DockerizeAPI.csproj -c Release -r linux-x64 --self-contained -o ./publish
+dotnet publish src/DockerizeAPI/DockerizeAPI.csproj -c Release -o ./publish
+```
+
+> Framework-dependent: el zip es mas liviano, .NET ya esta en el servidor.
+
+Subir al servidor (zip, scp, o como prefieran):
+
+```bash
 scp -r ./publish/* usuario@IP_SERVIDOR:/tmp/hefestoforge-deploy/
 ```
 
@@ -74,11 +82,10 @@ En el servidor:
 
 ```bash
 sudo cp -r /tmp/hefestoforge-deploy/* /opt/hefestoforge/
-sudo chmod +x /opt/hefestoforge/DockerizeAPI
 rm -rf /tmp/hefestoforge-deploy
 ```
 
-- [ ] Binario ejecutable (`ls -la /opt/hefestoforge/DockerizeAPI`)
+- [ ] `DockerizeAPI.dll` presente (`ls /opt/hefestoforge/DockerizeAPI.dll`)
 - [ ] `appsettings.json` presente
 
 ---
@@ -89,19 +96,10 @@ rm -rf /tmp/hefestoforge-deploy
 sudo nano /opt/hefestoforge/appsettings.json
 ```
 
-**Cambiar solo la IP:**
+**Verificar:**
+- `"UseWsl"` no este en `true` (debe ser `false` o no existir)
+- La URL se controla en el `.service` (`ASPNETCORE_URLS=http://0.0.0.0:5050`), no en appsettings
 
-```json
-{
-  "Server": {
-    "Urls": "http://IP_DEL_SERVIDOR:5050"
-  }
-}
-```
-
-**Verificar que no diga `"UseWsl": true`** (debe ser false o no existir).
-
-- [ ] IP configurada
 - [ ] UseWsl no esta en true
 
 ---
@@ -111,30 +109,18 @@ sudo nano /opt/hefestoforge/appsettings.json
 ```bash
 sudo tee /etc/systemd/system/HefestoForge.service > /dev/null << 'EOF'
 [Unit]
-Description=HefestoForge - Automated Docker Image Builder
+Description=Api .NET Hefesto Forge
 After=network.target
 
 [Service]
-Type=notify
 WorkingDirectory=/opt/hefestoforge
-ExecStart=/opt/hefestoforge/DockerizeAPI
+ExecStart=/usr/lib64/dotnet/dotnet /opt/hefestoforge/DockerizeAPI.dll
 Restart=always
-RestartSec=10
-
-# Corre como root (Podman rootful, sin problemas de visibilidad de contenedores)
+RestartSec=2
+KillSignal=SIGQUIT
 User=root
-Group=root
-
 Environment=ASPNETCORE_ENVIRONMENT=Production
-Environment=DOTNET_EnableDiagnostics=0
-
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=hefestoforge
-
-LimitNOFILE=65536
-TimeoutStartSec=30
-TimeoutStopSec=30
+Environment=ASPNETCORE_URLS=http://0.0.0.0:5050
 
 [Install]
 WantedBy=multi-user.target
@@ -143,6 +129,8 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl enable HefestoForge.service
 ```
+
+> Mismo formato que los demas servidores. Solo cambia `User=root` y `WorkingDirectory`.
 
 - [ ] Servicio creado y habilitado
 
@@ -223,23 +211,21 @@ sudo journalctl -u HefestoForge -f         # logs en vivo
 tail -f /opt/hefestoforge/logs/*.log        # logs Serilog
 ```
 
-**Cambiar IP:**
+**Cambiar IP (si necesario):**
 
 ```bash
-sudo nano /opt/hefestoforge/appsettings.json    # editar Server:Urls
+sudo nano /etc/systemd/system/HefestoForge.service    # editar ASPNETCORE_URLS
+sudo systemctl daemon-reload
 sudo systemctl restart HefestoForge
 ```
 
 ---
 
-## Resumen Rapido (servidor nuevo, solo cambia IP)
+## Resumen Rapido (servidor nuevo)
 
 ```bash
-sudo dnf install -y git curl tar
 sudo mkdir -p /opt/hefestoforge/logs /tmp/dockerize-builds /usr/share/containershareds
 # ... copiar archivos publicados a /opt/hefestoforge/ ...
-sudo chmod +x /opt/hefestoforge/DockerizeAPI
-sudo sed -i 's|http://[^"]*:5050|http://NUEVA_IP:5050|' /opt/hefestoforge/appsettings.json
 # ... crear HefestoForge.service (ver Fase 5) ...
 sudo systemctl daemon-reload
 sudo systemctl enable --now HefestoForge.service
