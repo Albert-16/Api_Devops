@@ -107,7 +107,12 @@ sudo nano /opt/hefestoforge/appsettings.json
 ## Fase 5: Servicio systemd
 
 ```bash
-sudo tee /etc/systemd/system/HefestoForge.service > /dev/null << 'EOF'
+sudo nano /etc/systemd/system/HefestoForge.service
+```
+
+Pegar el siguiente contenido:
+
+```ini
 [Unit]
 Description=Api .NET Hefesto Forge
 After=network.target
@@ -124,13 +129,14 @@ Environment=ASPNETCORE_URLS=http://0.0.0.0:5050
 
 [Install]
 WantedBy=multi-user.target
-EOF
+```
 
+Guardar: `Ctrl+O` → `Enter` → `Ctrl+X`
+
+```bash
 sudo systemctl daemon-reload
 sudo systemctl enable HefestoForge.service
 ```
-
-> Mismo formato que los demas servidores. Solo cambia `User=root` y `WorkingDirectory`.
 
 - [ ] Servicio creado y habilitado
 
