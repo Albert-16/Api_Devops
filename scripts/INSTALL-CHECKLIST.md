@@ -1,72 +1,32 @@
 # HefestoForge — Checklist de Instalacion en RHEL
 
 > **Prerequisito**: Acceso SSH con `sudo`.
+> **Nota**: RHEL usa Podman emulando Docker (`docker` → `podman`). El servicio corre como `root`
+> para evitar problemas de visibilidad de contenedores entre usuarios.
 
 ---
 
 ## Fase 1: Prerequisitos
 
 ```bash
-# SO
 cat /etc/redhat-release        # RHEL 8+
-
-# Paquetes base
 sudo dnf install -y git curl tar
-
-# Docker
-sudo dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
-sudo dnf install -y docker-ce docker-ce-cli containerd.io
-sudo systemctl enable --now docker
 ```
 
 - [ ] Git instalado
-- [ ] Docker instalado y corriendo (`sudo systemctl status docker`)
+- [ ] `docker --version` responde (Podman emulando Docker o Docker CE)
 
-**Verificar que Docker es rootful** (si es rootless, otros usuarios no ven los contenedores de la API):
-
-```bash
-docker info 2>/dev/null | grep "Docker Root Dir"
-# Debe ser: /var/lib/docker
-# Si dice /home/.../.local/share/docker → es rootless, NO sirve
-```
-
-- [ ] Docker Root Dir = `/var/lib/docker`
-
-> **.NET Runtime**: Solo necesario si se publica framework-dependent.
-> Si se publica self-contained, no se necesita .NET en el servidor.
+> **.NET Runtime**: Solo si se publica framework-dependent.
+> Con self-contained no se necesita .NET en el servidor.
 
 ---
 
-## Fase 2: Usuario de Servicio
+## Fase 2: Directorios
 
 ```bash
-sudo useradd --system --shell /usr/sbin/nologin --create-home hefestoforge
-sudo usermod -aG docker hefestoforge
-```
-
-- [ ] Usuario creado (`id hefestoforge`)
-- [ ] En grupo docker (`groups hefestoforge`)
-
----
-
-## Fase 3: Directorios y Permisos
-
-```bash
-# Crear
 sudo mkdir -p /opt/hefestoforge/logs
 sudo mkdir -p /tmp/dockerize-builds
 sudo mkdir -p /usr/share/containershareds
-
-# Owner
-sudo chown -R hefestoforge:hefestoforge /opt/hefestoforge
-sudo chown -R hefestoforge:hefestoforge /tmp/dockerize-builds
-sudo chown -R hefestoforge:hefestoforge /usr/share/containershareds
-
-# setgid: subdirectorios nuevos heredan el grupo del padre
-# (sin esto, carpetas que crea la API pueden quedar sin permisos para otros)
-sudo chmod 2755 /opt/hefestoforge
-sudo chmod 2755 /opt/hefestoforge/logs
-sudo chmod 2755 /tmp/dockerize-builds
 ```
 
 | Directorio | La API necesita |
@@ -75,13 +35,14 @@ sudo chmod 2755 /tmp/dockerize-builds
 | `/opt/hefestoforge/template-overrides/` | Escritura (se crea al modificar templates) |
 | `/tmp/dockerize-builds/` | Escritura (workspaces temporales por build) |
 | `/usr/share/containershareds` | Lectura (shared files, vacio por ahora) |
-| `/var/run/docker.sock` | Acceso via grupo `docker` |
+
+- [ ] Directorios creados
 
 ### SELinux (solo si esta en Enforcing)
 
 ```bash
 getenforce
-# Si dice "Permissive" o "Disabled" → saltar esta seccion
+# Si dice "Permissive" o "Disabled" → saltar
 ```
 
 ```bash
@@ -95,22 +56,12 @@ sudo semanage fcontext -a -t usr_t "/usr/share/containershareds(/.*)?"
 sudo restorecon -Rv /usr/share/containershareds
 ```
 
-> **Diagnostico SELinux**: Si todo esta bien pero falla con "Permission denied":
+> **Diagnostico**: Si falla con "Permission denied" y los permisos Unix estan bien:
 > `sudo ausearch -m avc -ts recent`
-
-### Verificacion de permisos
-
-```bash
-sudo -u hefestoforge touch /tmp/dockerize-builds/test && rm /tmp/dockerize-builds/test && echo "OK: tmp"
-sudo -u hefestoforge touch /opt/hefestoforge/logs/test && rm /opt/hefestoforge/logs/test && echo "OK: logs"
-sudo -u hefestoforge docker version > /dev/null 2>&1 && echo "OK: docker"
-```
-
-- [ ] Todos dicen OK
 
 ---
 
-## Fase 4: Copiar la Aplicacion
+## Fase 3: Copiar la Aplicacion
 
 Desde la maquina de desarrollo:
 
@@ -124,7 +75,6 @@ En el servidor:
 ```bash
 sudo cp -r /tmp/hefestoforge-deploy/* /opt/hefestoforge/
 sudo chmod +x /opt/hefestoforge/DockerizeAPI
-sudo chown -R hefestoforge:hefestoforge /opt/hefestoforge
 rm -rf /tmp/hefestoforge-deploy
 ```
 
@@ -133,7 +83,7 @@ rm -rf /tmp/hefestoforge-deploy
 
 ---
 
-## Fase 5: Configurar appsettings.json
+## Fase 4: Configurar appsettings.json
 
 ```bash
 sudo nano /opt/hefestoforge/appsettings.json
@@ -156,14 +106,13 @@ sudo nano /opt/hefestoforge/appsettings.json
 
 ---
 
-## Fase 6: Servicio systemd
+## Fase 5: Servicio systemd
 
 ```bash
 sudo tee /etc/systemd/system/HefestoForge.service > /dev/null << 'EOF'
 [Unit]
 Description=HefestoForge - Automated Docker Image Builder
-After=network.target docker.service
-Requires=docker.service
+After=network.target
 
 [Service]
 Type=notify
@@ -172,12 +121,12 @@ ExecStart=/opt/hefestoforge/DockerizeAPI
 Restart=always
 RestartSec=10
 
-User=hefestoforge
-Group=hefestoforge
+# Corre como root (Podman rootful, sin problemas de visibilidad de contenedores)
+User=root
+Group=root
 
 Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=DOTNET_EnableDiagnostics=0
-UMask=0022
 
 StandardOutput=journal
 StandardError=journal
@@ -199,7 +148,7 @@ sudo systemctl enable HefestoForge.service
 
 ---
 
-## Fase 7: Firewall
+## Fase 6: Firewall
 
 ```bash
 sudo firewall-cmd --add-port=5050/tcp --permanent
@@ -210,7 +159,7 @@ sudo firewall-cmd --reload
 
 ---
 
-## Fase 8: Iniciar y Verificar
+## Fase 7: Iniciar y Verificar
 
 ```bash
 sudo systemctl start HefestoForge.service
@@ -233,12 +182,12 @@ curl http://localhost:5050/api/builds        # items: []
 - [ ] Health check OK
 - [ ] API responde
 
-**Verificar visibilidad Docker** (que otros usuarios vean contenedores de la API):
+**Verificar visibilidad de contenedores** (cualquier usuario los ve):
 
 ```bash
-sudo -u hefestoforge docker run -d --name test-vis alpine sleep 60
-sudo docker ps | grep test-vis              # debe aparecer
-sudo -u hefestoforge docker rm -f test-vis
+docker run -d --name test-vis alpine sleep 60
+docker ps | grep test-vis                   # debe aparecer
+docker rm -f test-vis
 ```
 
 - [ ] Contenedores visibles para todos
@@ -249,11 +198,11 @@ sudo -u hefestoforge docker rm -f test-vis
 
 ---
 
-## Fase 9: Conectividad al Registry
+## Fase 8: Conectividad al Registry
 
 ```bash
 curl -k https://repos.daviviendahn.dvhn/api/v1/version
-sudo -u hefestoforge docker login -u token -p TOKEN repos.daviviendahn.dvhn
+docker login -u token -p TOKEN repos.daviviendahn.dvhn
 ```
 
 - [ ] Registry accesible
@@ -286,18 +235,12 @@ sudo systemctl restart HefestoForge
 ## Resumen Rapido (servidor nuevo, solo cambia IP)
 
 ```bash
-sudo dnf install -y git curl docker-ce docker-ce-cli containerd.io
-sudo systemctl enable --now docker
-sudo useradd --system --shell /usr/sbin/nologin --create-home hefestoforge
-sudo usermod -aG docker hefestoforge
+sudo dnf install -y git curl tar
 sudo mkdir -p /opt/hefestoforge/logs /tmp/dockerize-builds /usr/share/containershareds
-sudo chown -R hefestoforge:hefestoforge /opt/hefestoforge /tmp/dockerize-builds /usr/share/containershareds
-sudo chmod 2755 /opt/hefestoforge /opt/hefestoforge/logs /tmp/dockerize-builds
 # ... copiar archivos publicados a /opt/hefestoforge/ ...
 sudo chmod +x /opt/hefestoforge/DockerizeAPI
-sudo chown -R hefestoforge:hefestoforge /opt/hefestoforge
 sudo sed -i 's|http://[^"]*:5050|http://NUEVA_IP:5050|' /opt/hefestoforge/appsettings.json
-# ... crear HefestoForge.service (ver Fase 6) ...
+# ... crear HefestoForge.service (ver Fase 5) ...
 sudo systemctl daemon-reload
 sudo systemctl enable --now HefestoForge.service
 sudo firewall-cmd --add-port=5050/tcp --permanent && sudo firewall-cmd --reload
