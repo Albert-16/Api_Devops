@@ -45,6 +45,9 @@ public sealed class BuildChannel
 /// <param name="IncludeOdbcDependencies">Si es true, usa template ODBC/Debian.</param>
 /// <param name="RegistryUrl">URL del Container Registry.</param>
 /// <param name="RegistryOwner">Owner/organización del registry.</param>
+/// <param name="Sandbox">Si es true, ejecuta el pipeline en modo sandbox (simulado).</param>
+/// <param name="SimulateFailure">Si es true, simula un fallo en el paso indicado por FailAtStep.</param>
+/// <param name="FailAtStep">Paso en el que simular el fallo.</param>
 public sealed record BuildChannelRequest(
     Guid BuildId,
     string RepositoryUrl,
@@ -54,4 +57,7 @@ public sealed record BuildChannelRequest(
     string ImageTag,
     bool IncludeOdbcDependencies,
     string RegistryUrl,
-    string RegistryOwner);
+    string RegistryOwner,
+    bool Sandbox = false,
+    bool SimulateFailure = false,
+    string? FailAtStep = null);

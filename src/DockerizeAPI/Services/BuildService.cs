@@ -68,7 +68,8 @@ public sealed class BuildService : IBuildService
             Quiet = request.ImageConfig?.Quiet ?? false,
             Network = request.ImageConfig?.Network ?? NetworkMode.Host,
             Progress = request.ImageConfig?.Progress ?? ProgressMode.Auto,
-            OriginalRequestJson = JsonSerializer.Serialize(request)
+            OriginalRequestJson = JsonSerializer.Serialize(request),
+            IsSandbox = request.Sandbox
         };
 
         _store.AddBuild(buildRecord);
@@ -83,13 +84,16 @@ public sealed class BuildService : IBuildService
             imageTag,
             includeOdbc,
             registryUrl,
-            owner);
+            owner,
+            request.Sandbox,
+            request.SimulateFailure,
+            request.FailAtStep);
 
         await _buildChannel.Writer.WriteAsync(channelRequest, cancellationToken);
 
         _logger.LogInformation(
-            "Build {BuildId} encolado: {ImageName}:{ImageTag} desde {RepositoryUrl}",
-            buildRecord.Id, imageName, imageTag, ProcessRunner.SanitizeForLogging(request.RepositoryUrl));
+            "Build {BuildId} encolado{Sandbox}: {ImageName}:{ImageTag} desde {RepositoryUrl}",
+            buildRecord.Id, request.Sandbox ? " [SANDBOX]" : "", imageName, imageTag, ProcessRunner.SanitizeForLogging(request.RepositoryUrl));
 
         return MapToResponse(buildRecord);
     }
@@ -123,6 +127,7 @@ public sealed class BuildService : IBuildService
             ImageSizeBytes = build.ImageSizeBytes,
             RetryCount = build.RetryCount,
             ImageUrl = build.ImageUrl,
+            IsSandbox = build.IsSandbox,
             Logs = logs.Select(l => new BuildLogEntry
             {
                 Message = l.Message,
@@ -206,7 +211,7 @@ public sealed class BuildService : IBuildService
             b.ImageSizeBytes = null;
         });
 
-        // Re-encolar
+        // Re-encolar (preservar sandbox del build original)
         var channelRequest = new BuildChannelRequest(
             build.Id,
             build.RepositoryUrl,
@@ -216,7 +221,8 @@ public sealed class BuildService : IBuildService
             build.ImageTag,
             build.IncludeOdbcDependencies,
             build.RegistryUrl,
-            build.RegistryOwner);
+            build.RegistryOwner,
+            build.IsSandbox);
 
         await _buildChannel.Writer.WriteAsync(channelRequest, cancellationToken);
 
@@ -241,7 +247,8 @@ public sealed class BuildService : IBuildService
             IncludeOdbcDependencies = record.IncludeOdbcDependencies,
             CreatedAt = record.CreatedAt,
             CompletedAt = record.CompletedAt,
-            ImageUrl = record.ImageUrl
+            ImageUrl = record.ImageUrl,
+            IsSandbox = record.IsSandbox
         };
     }
 

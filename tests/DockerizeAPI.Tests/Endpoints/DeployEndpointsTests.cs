@@ -97,6 +97,29 @@ public sealed class DeployEndpointsTests
     }
 
     [Fact]
+    public async Task CreateDeploy_Sandbox_RetornaAcceptedConIsSandbox()
+    {
+        // Arrange
+        var request = new CreateDeployRequest
+        {
+            ImageName = "repos.dvhn/org/sandbox-app:latest",
+            GitToken = "test-token-12345",
+            ContainerName = "sandbox-test-container",
+            Sandbox = true
+        };
+
+        // Act
+        HttpResponseMessage response = await _client.PostAsJsonAsync("/api/deploys", request);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var result = await response.Content.ReadFromJsonAsync<DeployResponse>();
+        Assert.NotNull(result);
+        Assert.True(result.IsSandbox);
+        Assert.NotEqual(Guid.Empty, result.DeployId);
+    }
+
+    [Fact]
     public async Task StopDeploy_NoExiste_Retorna404()
     {
         // Act

@@ -6,6 +6,7 @@ using DockerizeAPI.Data;
 using DockerizeAPI.Models.Entities;
 using DockerizeAPI.Models.Enums;
 using DockerizeAPI.Models.Requests;
+using DockerizeAPI.Sandbox;
 using DockerizeAPI.Services;
 using DockerizeAPI.Services.Interfaces;
 using Microsoft.Extensions.Options;
@@ -23,6 +24,7 @@ public sealed class DeployProcessorService : BackgroundService
     private readonly DeployStore _store;
     private readonly IDockerRunService _dockerRunService;
     private readonly IDeployLogBroadcaster _broadcaster;
+    private readonly SandboxDeploySimulator _sandboxSimulator;
     private readonly DeploySettings _deploySettings;
     private readonly ILogger<DeployProcessorService> _logger;
 
@@ -35,6 +37,7 @@ public sealed class DeployProcessorService : BackgroundService
         DeployStore store,
         IDockerRunService dockerRunService,
         IDeployLogBroadcaster broadcaster,
+        SandboxDeploySimulator sandboxSimulator,
         IOptions<DeploySettings> deploySettings,
         ILogger<DeployProcessorService> logger)
     {
@@ -42,6 +45,7 @@ public sealed class DeployProcessorService : BackgroundService
         _store = store;
         _dockerRunService = dockerRunService;
         _broadcaster = broadcaster;
+        _sandboxSimulator = sandboxSimulator;
         _deploySettings = deploySettings.Value;
         _logger = logger;
     }
@@ -91,6 +95,44 @@ public sealed class DeployProcessorService : BackgroundService
     /// </summary>
     private async Task ProcessDeployAsync(DeployChannelRequest request, CancellationToken stoppingToken)
     {
+        // ─── Sandbox: delegar al simulador si es modo sandbox ───
+        if (request.Sandbox)
+        {
+            using var sandboxCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+            sandboxCts.CancelAfter(TimeSpan.FromMinutes(_deploySettings.TimeoutMinutes));
+            _deployCancellations[request.DeployId] = sandboxCts;
+
+            try
+            {
+                await _sandboxSimulator.SimulateAsync(request, sandboxCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                _store.UpdateDeploy(request.DeployId, d =>
+                {
+                    d.Status = DeployStatus.Cancelled;
+                    d.CompletedAt = DateTimeOffset.UtcNow;
+                    d.ErrorMessage = "Deploy sandbox cancelado.";
+                });
+            }
+            catch (Exception ex)
+            {
+                _store.UpdateDeploy(request.DeployId, d =>
+                {
+                    d.Status = DeployStatus.Failed;
+                    d.CompletedAt = DateTimeOffset.UtcNow;
+                    d.ErrorMessage = $"Error en sandbox: {ex.Message}";
+                });
+                _logger.LogError(ex, "[SANDBOX] Error en deploy simulado {DeployId}", request.DeployId);
+            }
+            finally
+            {
+                _deployCancellations.TryRemove(request.DeployId, out _);
+                await _broadcaster.CompleteDeployAsync(request.DeployId);
+            }
+            return;
+        }
+
         using var deployCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
         deployCts.CancelAfter(TimeSpan.FromMinutes(_deploySettings.TimeoutMinutes));
         _deployCancellations[request.DeployId] = deployCts;

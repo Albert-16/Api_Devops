@@ -93,4 +93,7 @@ public sealed class DeployRecord
 
     /// <summary>Configuración original del request serializada como JSON para soportar retry.</summary>
     public string? OriginalRequestJson { get; set; }
+
+    /// <summary>Si es true, este deploy fue ejecutado en modo sandbox (simulado).</summary>
+    public bool IsSandbox { get; set; }
 }

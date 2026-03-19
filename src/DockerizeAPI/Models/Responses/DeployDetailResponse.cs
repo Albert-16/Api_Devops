@@ -68,6 +68,9 @@ public sealed record DeployDetailResponse
     /// <summary>Número de reintentos realizados.</summary>
     public int RetryCount { get; init; }
 
+    /// <summary>Si es true, este deploy fue ejecutado en modo sandbox (simulado).</summary>
+    public bool IsSandbox { get; init; }
+
     /// <summary>Logs del deploy.</summary>
     public IReadOnlyList<DeployLogEntry>? Logs { get; init; }
 }

@@ -98,4 +98,7 @@ public sealed class BuildRecord
 
     /// <summary>Nivel de detalle del progreso.</summary>
     public ProgressMode Progress { get; set; } = ProgressMode.Auto;
+
+    /// <summary>Si es true, este build fue ejecutado en modo sandbox (simulado).</summary>
+    public bool IsSandbox { get; set; }
 }

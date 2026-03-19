@@ -18,7 +18,7 @@ catch (InvalidOperationException)
 
 try
 {
-    Log.Information("Iniciando DockerizeAPI — Servicio de Dockerización Automatizada");
+    Log.Information("Iniciando Hefesto — Servicio de Dockerización Automatizada");
 
     WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -41,7 +41,7 @@ try
     // ─── Configurar pipeline de middleware y endpoints ───
     app.ConfigurePipeline();
 
-    Log.Information("DockerizeAPI configurado. Escuchando en: {Urls}", string.Join(", ", app.Urls));
+    Log.Information("Hefesto configurado. Escuchando en: {Urls}", string.Join(", ", app.Urls));
 
     await app.RunAsync();
 }

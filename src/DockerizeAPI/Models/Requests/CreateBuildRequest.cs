@@ -26,4 +26,13 @@ public sealed record CreateBuildRequest
 
     /// <summary>Configuración del Container Registry donde se publicará la imagen.</summary>
     public RegistryConfigRequest? RegistryConfig { get; init; }
+
+    /// <summary>Si es true, ejecuta el pipeline en modo sandbox (simulado, sin operaciones reales de git/docker).</summary>
+    public bool Sandbox { get; init; }
+
+    /// <summary>Si es true en modo sandbox, simula un fallo en el paso indicado por FailAtStep.</summary>
+    public bool SimulateFailure { get; init; }
+
+    /// <summary>Paso en el que simular el fallo (Cloning, Building, Pushing). Solo aplica si Sandbox y SimulateFailure son true.</summary>
+    public string? FailAtStep { get; init; }
 }

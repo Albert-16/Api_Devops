@@ -41,9 +41,15 @@ public sealed class DeployChannel
 /// <param name="ContainerName">Nombre del container Docker.</param>
 /// <param name="GitToken">Token de acceso para login al registry.</param>
 /// <param name="RegistryUrl">URL del Container Registry.</param>
+/// <param name="Sandbox">Si es true, ejecuta el pipeline en modo sandbox (simulado).</param>
+/// <param name="SimulateFailure">Si es true, simula un fallo en el paso indicado por FailAtStep.</param>
+/// <param name="FailAtStep">Paso en el que simular el fallo.</param>
 public sealed record DeployChannelRequest(
     Guid DeployId,
     string ImageName,
     string ContainerName,
     string GitToken,
-    string RegistryUrl);
+    string RegistryUrl,
+    bool Sandbox = false,
+    bool SimulateFailure = false,
+    string? FailAtStep = null);

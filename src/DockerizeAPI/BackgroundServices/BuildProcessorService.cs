@@ -4,6 +4,7 @@ using DockerizeAPI.Configuration;
 using DockerizeAPI.Data;
 using DockerizeAPI.Models.Entities;
 using DockerizeAPI.Models.Enums;
+using DockerizeAPI.Sandbox;
 using DockerizeAPI.Services;
 using DockerizeAPI.Services.Interfaces;
 using Microsoft.Extensions.Options;
@@ -25,6 +26,7 @@ public sealed class BuildProcessorService : BackgroundService
     private readonly IDockerBuildService _dockerBuildService;
     private readonly ISharedFilesService _sharedFilesService;
     private readonly IBuildLogBroadcaster _broadcaster;
+    private readonly SandboxBuildSimulator _sandboxSimulator;
     private readonly BuildSettings _buildSettings;
     private readonly ILogger<BuildProcessorService> _logger;
 
@@ -40,6 +42,7 @@ public sealed class BuildProcessorService : BackgroundService
         IDockerBuildService dockerBuildService,
         ISharedFilesService sharedFilesService,
         IBuildLogBroadcaster broadcaster,
+        SandboxBuildSimulator sandboxSimulator,
         IOptions<BuildSettings> buildSettings,
         ILogger<BuildProcessorService> logger)
     {
@@ -50,6 +53,7 @@ public sealed class BuildProcessorService : BackgroundService
         _dockerBuildService = dockerBuildService;
         _sharedFilesService = sharedFilesService;
         _broadcaster = broadcaster;
+        _sandboxSimulator = sandboxSimulator;
         _buildSettings = buildSettings.Value;
         _logger = logger;
     }
@@ -100,6 +104,56 @@ public sealed class BuildProcessorService : BackgroundService
     /// </summary>
     private async Task ProcessBuildAsync(BuildChannelRequest request, CancellationToken stoppingToken)
     {
+        // ─── Sandbox: delegar al simulador si es modo sandbox ───
+        if (request.Sandbox)
+        {
+            using var sandboxCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+            sandboxCts.CancelAfter(TimeSpan.FromMinutes(_buildSettings.TimeoutMinutes));
+            _buildCancellations[request.BuildId] = sandboxCts;
+
+            try
+            {
+                await _sandboxSimulator.SimulateAsync(request, sandboxCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                _store.UpdateBuild(request.BuildId, b =>
+                {
+                    b.Status = BuildStatus.Cancelled;
+                    b.CompletedAt = DateTimeOffset.UtcNow;
+                    b.ErrorMessage = "Build sandbox cancelado.";
+                });
+            }
+            catch (Exception ex)
+            {
+                _store.UpdateBuild(request.BuildId, b =>
+                {
+                    b.Status = BuildStatus.Failed;
+                    b.CompletedAt = DateTimeOffset.UtcNow;
+                    b.ErrorMessage = $"Error en sandbox: {ex.Message}";
+                });
+                _logger.LogError(ex, "[SANDBOX] Error en build simulado {BuildId}", request.BuildId);
+            }
+            finally
+            {
+                _buildCancellations.TryRemove(request.BuildId, out _);
+
+                _store.AddLog(request.BuildId, new BuildLog
+                {
+                    BuildRecordId = request.BuildId,
+                    Message = $"Cleanup completado para build {request.BuildId}",
+                    Level = "info"
+                });
+
+                await _broadcaster.BroadcastLogAsync(request.BuildId,
+                    $"Cleanup completado para build {request.BuildId}",
+                    cancellationToken: CancellationToken.None);
+
+                await _broadcaster.CompleteBuildAsync(request.BuildId);
+            }
+            return;
+        }
+
         using var buildCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
         buildCts.CancelAfter(TimeSpan.FromMinutes(_buildSettings.TimeoutMinutes));
         _buildCancellations[request.BuildId] = buildCts;

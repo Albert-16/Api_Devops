@@ -36,4 +36,7 @@ public sealed record BuildResponse
 
     /// <summary>URL completa de la imagen en el registry (null si no se ha completado).</summary>
     public string? ImageUrl { get; init; }
+
+    /// <summary>Si es true, este build fue ejecutado en modo sandbox (simulado).</summary>
+    public bool IsSandbox { get; init; }
 }

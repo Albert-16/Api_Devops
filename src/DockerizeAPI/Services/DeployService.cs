@@ -62,7 +62,8 @@ public sealed class DeployService : IDeployService
             Volumes = request.Volumes.ToList(),
             EnvironmentVariables = new Dictionary<string, string>(request.EnvironmentVariables),
             RegistryUrl = registryUrl,
-            OriginalRequestJson = JsonSerializer.Serialize(request)
+            OriginalRequestJson = JsonSerializer.Serialize(request),
+            IsSandbox = request.Sandbox
         };
 
         _store.AddDeploy(deployRecord);
@@ -73,13 +74,16 @@ public sealed class DeployService : IDeployService
             request.ImageName,
             request.ContainerName,
             request.GitToken,
-            registryUrl);
+            registryUrl,
+            request.Sandbox,
+            request.SimulateFailure,
+            request.FailAtStep);
 
         await _deployChannel.Writer.WriteAsync(channelRequest, cancellationToken);
 
         _logger.LogInformation(
-            "Deploy {DeployId} encolado: {ImageName} → container {ContainerName}",
-            deployRecord.Id, request.ImageName, request.ContainerName);
+            "Deploy {DeployId} encolado{Sandbox}: {ImageName} → container {ContainerName}",
+            deployRecord.Id, request.Sandbox ? " [SANDBOX]" : "", request.ImageName, request.ContainerName);
 
         return MapToResponse(deployRecord);
     }
@@ -113,6 +117,7 @@ public sealed class DeployService : IDeployService
             StartedAt = deploy.StartedAt,
             CompletedAt = deploy.CompletedAt,
             RetryCount = deploy.RetryCount,
+            IsSandbox = deploy.IsSandbox,
             Logs = logs.Select(l => new DeployLogEntry
             {
                 Message = l.Message,
@@ -308,7 +313,8 @@ public sealed class DeployService : IDeployService
             IsRollback = record.IsRollback,
             CreatedAt = record.CreatedAt,
             CompletedAt = record.CompletedAt,
-            ContainerId = record.ContainerId
+            ContainerId = record.ContainerId,
+            IsSandbox = record.IsSandbox
         };
     }
 

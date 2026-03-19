@@ -2,6 +2,7 @@ using System.Reflection;
 using DockerizeAPI.BackgroundServices;
 using DockerizeAPI.Configuration;
 using DockerizeAPI.Data;
+using DockerizeAPI.Sandbox;
 using DockerizeAPI.Services;
 using DockerizeAPI.Services.Interfaces;
 
@@ -48,6 +49,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDeployLogBroadcaster, DeployLogBroadcaster>();
         services.AddSingleton<IDockerRunService, DockerRunService>();
         services.AddSingleton<IDeployService, DeployService>();
+
+        // ─── Sandbox Simuladores ───
+        services.AddSingleton<SandboxBuildSimulator>();
+        services.AddSingleton<SandboxDeploySimulator>();
 
         // ─── Background Services ───
         services.AddHostedService<BuildProcessorService>();

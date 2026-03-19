@@ -99,6 +99,29 @@ public sealed class BuildEndpointsTests
     }
 
     [Fact]
+    public async Task CreateBuild_Sandbox_RetornaAcceptedConIsSandbox()
+    {
+        // Arrange
+        var request = new CreateBuildRequest
+        {
+            RepositoryUrl = "https://repos.dvhn/org/sandbox-repo.git",
+            Branch = "main",
+            GitToken = "test-token-12345",
+            Sandbox = true
+        };
+
+        // Act
+        HttpResponseMessage response = await _client.PostAsJsonAsync("/api/builds", request);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var result = await response.Content.ReadFromJsonAsync<BuildResponse>();
+        Assert.NotNull(result);
+        Assert.True(result.IsSandbox);
+        Assert.NotEqual(Guid.Empty, result.BuildId);
+    }
+
+    [Fact]
     public async Task CancelBuild_NoExiste_Retorna404()
     {
         // Act

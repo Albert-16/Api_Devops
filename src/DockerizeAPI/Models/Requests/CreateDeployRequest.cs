@@ -46,4 +46,13 @@ public sealed record CreateDeployRequest
 
     /// <summary>Variables de entorno para el container.</summary>
     public Dictionary<string, string> EnvironmentVariables { get; init; } = new();
+
+    /// <summary>Si es true, ejecuta el pipeline en modo sandbox (simulado, sin operaciones reales de docker).</summary>
+    public bool Sandbox { get; init; }
+
+    /// <summary>Si es true en modo sandbox, simula un fallo en el paso indicado por FailAtStep.</summary>
+    public bool SimulateFailure { get; init; }
+
+    /// <summary>Paso en el que simular el fallo (LoggingIn, Pulling, Deploying). Solo aplica si Sandbox y SimulateFailure son true.</summary>
+    public string? FailAtStep { get; init; }
 }

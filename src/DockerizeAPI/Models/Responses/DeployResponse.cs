@@ -33,4 +33,7 @@ public sealed record DeployResponse
 
     /// <summary>ID del container Docker (null si aún no se ha creado).</summary>
     public string? ContainerId { get; init; }
+
+    /// <summary>Si es true, este deploy fue ejecutado en modo sandbox (simulado).</summary>
+    public bool IsSandbox { get; init; }
 }

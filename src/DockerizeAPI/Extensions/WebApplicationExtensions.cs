@@ -29,7 +29,7 @@ public static class WebApplicationExtensions
             app.UseSwagger();
             app.UseSwaggerUI(options =>
             {
-                options.SwaggerEndpoint("/swagger/v1/swagger.json", "DockerizeAPI v1");
+                options.SwaggerEndpoint("/swagger/v1/swagger.json", "Hefesto v1");
                 options.RoutePrefix = "swagger";
             });
         }
