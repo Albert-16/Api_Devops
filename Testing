@@ -1,1 +1,170 @@
+using ConfigLoader;
+using DataMapper;
+using DataMapper.Mappers;
+using Domain.Entities;
+using FastServer.Models;
+using Infraestructure.Services;
+using JT400CS.Core;
+using JT400CS.Extensions;
+using JT400CS.Models;
+using Microsoft.Extensions.Logging;
+using org.omg.DynamicAny;
+using System;
+using System.Collections.Generic;
+using System.Data.Odbc;
+using System.Diagnostics;
+using System.Reflection;
+using System.Text;
+
+
+namespace Infraestructure.Repository
+{
+    public class Repo : IRepository
+    {
+
+        private readonly ILogger<Repo> _logger;
+        private readonly IJT400CSFactory _factory;
+        private readonly IConfigManager _configManager;
+
+
+        public Repo(ILogger<Repo> logger, IConfigManager configManager, IJT400CSFactory jT400CS)
+        {
+            _logger = logger;
+            _configManager = configManager;
+            _factory = jT400CS;
+        }
+
+        public async Task<DataTransferObject> DoExecute(Data dataRequest, Guid requestId)
+        {
+            _logger.LogInformation("StartConsult Request");
+            Stopwatch stopwatchGene = Stopwatch.StartNew();
+
+            _logger.LogInformation("StartConsult JT400CS");
+            Stopwatch stopwatchConexiones = Stopwatch.StartNew();
+            using var jt400Connection = _factory.Create();
+            stopwatchConexiones.Stop();
+            _logger.LogInformation($"EndConsult JT400CS {stopwatchConexiones.Elapsed.TotalMilliseconds} ms");
+
+
+            DataTransferObject responseData = new DataTransferObject()
+            {
+                Error = "00000000000000000000",
+                ExternalError = "PROCESO REALIZADO CORRECTAMENTE",
+                InternalError = "",
+                Bank = _configManager.GetString("bank"),
+                Data = new Data()
+                {
+                    DataList = new(),
+                    Field = "RESPONSE"
+                }
+            };
+
+
+            var cyb00027cl = new CYB00027LC();
+            var cyb27clResponse = new CYB00027CLResponse();
+            var cyb27clheader = new CYB00027CLHeader();
+
+            cyb00027cl = dataRequest.MapFromRequest<CYB00027LC>();
+
+            var codMsgRespuesta = 0;
+            var lista = new Data();
+            lista.Field = "Registros";
+            lista.DataList = new List<Data>();
+
+            var listaRegistros = dataRequest.DataList.Where(item => item.Field.Equals("Registros"));
+            var x = listaRegistros.Count();
+            foreach (var item in listaRegistros)
+            {
+                var i = 0;
+                var registros = item;
+
+                foreach (var registro in registros.DataList)
+                {
+                    i += 1;
+                    if (registro.Field.Equals("Registro"))
+                    {
+                        var dataConversion = registro;
+                        dataConversion.MapFromRequestToInstance(cyb00027cl);
+                        
+                    }
+
+
+                    _logger.LogInformation("StartConsult CYB00027LC CL ");
+                    stopwatchConexiones.Restart();
+                    var result = await jt400Connection.CallProgramAsync(cyb00027cl);
+                    stopwatchConexiones.Stop();
+                    _logger.LogInformation($"EndConsult CYB00071LC CL {stopwatchConexiones.Elapsed.TotalMilliseconds} ms");
+
+
+
+                    codMsgRespuesta = int.Parse(cyb00027cl.codMsgRespuesta);
+
+                    if(result != null)
+                    {
+                        cyb27clResponse = ServiceDataMapper.MapFromInstanceToInstance<CYB00027LC, CYB00027CLResponse>(cyb00027cl);
+                        cyb27clheader = ServiceDataMapper.MapFromInstanceToInstance<CYB00027LC, CYB00027CLHeader>(cyb00027cl);
+
+
+                        cyb27clheader.nombreOperacion = "";
+                        cyb27clheader.codMsgRespuesta = codMsgRespuesta.ToString();
+
+                        if(codMsgRespuesta == 0)
+                        {
+
+                            var zz = DataMapper.Mappers.ServiceDataMapper.MapToResponse(cyb27clResponse).Data.DataList;
+
+                            Data elemento = new Data
+                            {
+                                Field = "Registro",
+                                HasData = true,
+                                DataList = zz,
+                                Value = ""
+                            };
+
+                            lista.HasData = true;
+                            lista.DataList.Add(elemento);
+
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                    else {
+
+                            responseData.Error = "10000000000000000005";
+                            responseData.ExternalError = "ERROR AL EJECUTAR LA SOLICITUD";
+                            responseData.InternalError = "ERROR AL MOMENTO DE LLAMAR AL PROCEDIMIENTO ALMACENADO.";
+
+                    }
+
+
+
+                }
+            }
+
+            responseData = ServiceDataMapper.MapToResponse(cyb27clheader);
+            responseData.Error = "00000000000000000000";
+            responseData.ExternalError = "PROCESO REALIZADO CORRECTAMENTE";
+            responseData.InternalError = "";
+            responseData.Bank = _configManager.GetString("bank");
+            responseData.ExecuteMethod = _configManager.GetString("serviceMethod");
+
+            if (codMsgRespuesta == 0)
+            {
+                responseData.Data.DataList.Add(lista);
+            }
+
+            stopwatchGene.Stop();
+            _logger.LogInformation($"EndConsult Request {stopwatchGene.Elapsed.TotalMilliseconds} ms");
+            return responseData;
+        }
+
+        public string Decrypt(string value)
+        {
+            byte[] bytes = Convert.FromBase64String(value);
+            return Encoding.UTF8.GetString(bytes);
+        }
+    }
+}
 
