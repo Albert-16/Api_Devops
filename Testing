@@ -1,170 +1,148 @@
-using ConfigLoader;
-using DataMapper;
-using DataMapper.Mappers;
 using Domain.Entities;
-using FastServer.Models;
-using Infraestructure.Services;
-using JT400CS.Core;
-using JT400CS.Extensions;
-using JT400CS.Models;
-using Microsoft.Extensions.Logging;
-using org.omg.DynamicAny;
-using System;
+using Domain.Entities.CYBERPGM;
+using EasyTemplateSolution.DistributedServices.WsdlSunitpClient.Services;
+using EasyTemplateSolution.Domain.ARepositories;
+using EasyTemplateSolution.Domain.Dto;
+using EasyTemplateSolution.Infrastructure.DataModels;
+using EasyTemplateSolution.Infrastructure.Repository;
 using System.Collections.Generic;
-using System.Data.Odbc;
-using System.Diagnostics;
-using System.Reflection;
-using System.Text;
 
-
-namespace Infraestructure.Repository
+namespace Infraestructure.Repositories
 {
-    public class Repo : IRepository
+    public class ConversionCompraVentaRepository : AEasyDataProcessRepository
     {
+        public ConversionCompraVentaRepository() { }
 
-        private readonly ILogger<Repo> _logger;
-        private readonly IJT400CSFactory _factory;
-        private readonly IConfigManager _configManager;
-
-
-        public Repo(ILogger<Repo> logger, IConfigManager configManager, IJT400CSFactory jT400CS)
+        public override bool NeedDataBaseConnection
         {
-            _logger = logger;
-            _configManager = configManager;
-            _factory = jT400CS;
+            get { return true; }
         }
 
-        public async Task<DataTransferObject> DoExecute(Data dataRequest, Guid requestId)
+        public override Data DoProcess(ISunitpService _sunitpService, Data data)
         {
-            _logger.LogInformation("StartConsult Request");
-            Stopwatch stopwatchGene = Stopwatch.StartNew();
+            var dataResponse = new Data();
+            dataResponse.Error = "0000000000000000000";
+            dataResponse.HasData = true;
+            dataResponse.Field = "RESPONSE";
+            dataResponse.ExternalError = "PROCESO REALIZADO CORRECTAMENTE";
+            dataResponse.InternalError = "";
+            dataResponse.DataList = new List<Data>();
 
-            _logger.LogInformation("StartConsult JT400CS");
-            Stopwatch stopwatchConexiones = Stopwatch.StartNew();
-            using var jt400Connection = _factory.Create();
-            stopwatchConexiones.Stop();
-            _logger.LogInformation($"EndConsult JT400CS {stopwatchConexiones.Elapsed.TotalMilliseconds} ms");
-
-
-            DataTransferObject responseData = new DataTransferObject()
+            if (!data.Field.Equals("REQUEST_DETAIL"))
             {
-                Error = "00000000000000000000",
-                ExternalError = "PROCESO REALIZADO CORRECTAMENTE",
-                InternalError = "",
-                Bank = _configManager.GetString("bank"),
-                Data = new Data()
-                {
-                    DataList = new(),
-                    Field = "RESPONSE"
-                }
-            };
+                dataResponse.Error = "10000000000000000007";
+                dataResponse.ExternalError = "NO SE HAN ENCONTRADO LOS PARAMETROS NECESARIOS PARA EL REQUEST.";
+                return dataResponse;
+            }
+
+            //MapRequest
+            var cyb00027cl = new CYB00027CL();
+            var cyb00027clResponse = new CYB00027CLResponse();
+            var cyb00027clHeader = new CYB00027CLHeader();
+            var fQuery = new FieldsQuery();
+
+            var rom = new RequestObjectMapper();
+            rom.Map(cyb00027cl, data);
+            _sunitpService.AddObjLog("ConversionCompraVenta DoProcess", "00000000000000000000", "OBJETO ENVIADO", cyb00027cl.GetObject());
 
 
-            var cyb00027cl = new CYB00027LC();
-            var cyb27clResponse = new CYB00027CLResponse();
-            var cyb27clheader = new CYB00027CLHeader();
-
-            cyb00027cl = dataRequest.MapFromRequest<CYB00027LC>();
-
+            //crear encabezado de lista "Registros"
             var codMsgRespuesta = 0;
             var lista = new Data();
             lista.Field = "Registros";
             lista.DataList = new List<Data>();
 
-            var listaRegistros = dataRequest.DataList.Where(item => item.Field.Equals("Registros"));
-            var x = listaRegistros.Count();
-            foreach (var item in listaRegistros)
+
+            foreach (var item in data.DataList)
             {
-                var i = 0;
-                var registros = item;
-
-                foreach (var registro in registros.DataList)
+                if (item.Field.Equals("Registros"))
                 {
-                    i += 1;
-                    if (registro.Field.Equals("Registro"))
+
+                    var i = 0;
+                    var registros = item;
+                    foreach (var registro in registros.DataList)
                     {
-                        var dataConversion = registro;
-                        dataConversion.MapFromRequestToInstance(cyb00027cl);
-                        
-                    }
 
-
-                    _logger.LogInformation("StartConsult CYB00027LC CL ");
-                    stopwatchConexiones.Restart();
-                    var result = await jt400Connection.CallProgramAsync(cyb00027cl);
-                    stopwatchConexiones.Stop();
-                    _logger.LogInformation($"EndConsult CYB00071LC CL {stopwatchConexiones.Elapsed.TotalMilliseconds} ms");
-
-
-
-                    codMsgRespuesta = int.Parse(cyb00027cl.codMsgRespuesta);
-
-                    if(result != null)
-                    {
-                        cyb27clResponse = ServiceDataMapper.MapFromInstanceToInstance<CYB00027LC, CYB00027CLResponse>(cyb00027cl);
-                        cyb27clheader = ServiceDataMapper.MapFromInstanceToInstance<CYB00027LC, CYB00027CLHeader>(cyb00027cl);
-
-
-                        cyb27clheader.nombreOperacion = "";
-                        cyb27clheader.codMsgRespuesta = codMsgRespuesta.ToString();
-
-                        if(codMsgRespuesta == 0)
+                        i += 1;
+                        if (registro.Field.Equals("Registro"))
                         {
+                            var dataConversion = registro;
 
-                            var zz = DataMapper.Mappers.ServiceDataMapper.MapToResponse(cyb27clResponse).Data.DataList;
-
-                            Data elemento = new Data
-                            {
-                                Field = "Registro",
-                                HasData = true,
-                                DataList = zz,
-                                Value = ""
-                            };
-
-                            lista.HasData = true;
-                            lista.DataList.Add(elemento);
+                            var romList = new RequestObjectMapper();
+                            romList.Map(cyb00027cl, dataConversion);
 
                         }
+
+
+                        //CallModel
+                        var edm = new EasyDataModels();
+                        edm.EasyCallInit(_oledbConnection, cyb00027cl);
+                        edm.CallProcedure();
+                        _sunitpService.AddObjLog("ConversionCompraVenta DoProcess", "00000000000000000000", "OBJETO RECIBIDO", cyb00027cl.GetObject());
+
+
+                        codMsgRespuesta = int.Parse(cyb00027cl.GetValue("codMsgRespuesta"));
+
+                        if (edm.IsSuccessful())
+                        {
+                            var numBank = fQuery.fieldQuery("CUXBK", "1");
+                            var numProduct = fQuery.fieldQuery("CUX1AC", cyb00027cl.GetValue("valNumeroProducto"));
+
+
+                            //setear valores de cyb00027cl a cyb00027clHeader y cyb00027clResponse
+                            foreach (var items in cyb00027cl.GetParameters())
+                            {
+                                var key = items.Key;
+                                var easy = items.Value;
+
+                                cyb00027clHeader.SetValue(key, easy.value);
+                                cyb00027clResponse.SetValue(key, easy.value);
+                            }
+
+
+                            cyb00027clHeader.SetValue("codMsgRespuesta", codMsgRespuesta.ToString());
+
+                            if (codMsgRespuesta == 0)
+                            {
+                                //Response Data Mapper
+                                var rdmResponse = new ResponseDataMapper(i.ToString(), "Registro", "", "", "", "");
+                                var response = rdmResponse.Map(cyb00027clResponse);
+
+                                //agregar lista a encabezado
+                                lista.HasData = true;
+                                lista.DataList.Add(response);
+                            }
+                            else
+                            {
+
+                                break;
+                            }
+
+                        }
+
                         else
                         {
-                            break;
+                            dataResponse.Error = "10000000000000000005";
+                            dataResponse.ExternalError = "ERROR AL MOMENTO DE LLAMAR AL PROCEDIMIENTO ALMACENADO.";
+                            dataResponse.InternalError = cyb00027cl.GetValue("_defaultError");
                         }
-                    }
-                    else {
-
-                            responseData.Error = "10000000000000000005";
-                            responseData.ExternalError = "ERROR AL EJECUTAR LA SOLICITUD";
-                            responseData.InternalError = "ERROR AL MOMENTO DE LLAMAR AL PROCEDIMIENTO ALMACENADO.";
 
                     }
-
-
 
                 }
             }
 
-            responseData = ServiceDataMapper.MapToResponse(cyb27clheader);
-            responseData.Error = "00000000000000000000";
-            responseData.ExternalError = "PROCESO REALIZADO CORRECTAMENTE";
-            responseData.InternalError = "";
-            responseData.Bank = _configManager.GetString("bank");
-            responseData.ExecuteMethod = _configManager.GetString("serviceMethod");
+            var rdm = new ResponseDataMapper("", "RESPONSE", "", "00000000000000000000", "PROCESO REALIZADO EXITOSAMENTE", "");
+            dataResponse = rdm.Map(cyb00027clHeader);
 
             if (codMsgRespuesta == 0)
             {
-                responseData.Data.DataList.Add(lista);
+                dataResponse.DataList.Add(lista);
             }
 
-            stopwatchGene.Stop();
-            _logger.LogInformation($"EndConsult Request {stopwatchGene.Elapsed.TotalMilliseconds} ms");
-            return responseData;
-        }
+            _sunitpService.AddObjLog("ConversionCompraVenta DoProcess", "00000000000000000000", "OBJETO ENVIADO", cyb00027cl.GetObject());
+            return dataResponse;
 
-        public string Decrypt(string value)
-        {
-            byte[] bytes = Convert.FromBase64String(value);
-            return Encoding.UTF8.GetString(bytes);
         }
     }
 }
-
