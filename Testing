@@ -1,148 +1,177 @@
+using ConfigLoader;
+using DataMapper;
+using DataMapper.Mappers;
 using Domain.Entities;
-using Domain.Entities.CYBERPGM;
-using EasyTemplateSolution.DistributedServices.WsdlSunitpClient.Services;
-using EasyTemplateSolution.Domain.ARepositories;
-using EasyTemplateSolution.Domain.Dto;
-using EasyTemplateSolution.Infrastructure.DataModels;
-using EasyTemplateSolution.Infrastructure.Repository;
+using FastServer.Models;
+using Infraestructure.Services;
+using JT400CS.Core;
+using JT400CS.Extensions;
+using JT400CS.Models;
+using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Text;
 
-namespace Infraestructure.Repositories
+namespace Infraestructure.Repository
 {
-    public class ConversionCompraVentaRepository : AEasyDataProcessRepository
+    /// <summary>
+    /// MS27 — Conversión Compra/Venta.
+    /// Recibe N registros en el request, ejecuta el programa CL CYB00027 por cada uno,
+    /// y acumula los resultados exitosos. Si alguno falla (codMsgRespuesta != 0),
+    /// se descarta todo (comportamiento atómico a nivel de respuesta).
+    /// 
+    /// Nota: la "atomicidad" es solo en la respuesta — las llamadas al AS400 que ya
+    /// ejecutaron exitosamente NO se revierten. Si se necesita rollback real,
+    /// debe implementarse en el programa CL del AS400.
+    /// </summary>
+    public class Repo : IRepository
     {
-        public ConversionCompraVentaRepository() { }
+        private readonly ILogger<Repo> _logger;
+        private readonly IJT400CSFactory _factory;
+        private readonly IConfigManager _configManager;
 
-        public override bool NeedDataBaseConnection
+        public Repo(ILogger<Repo> logger, IConfigManager configManager, IJT400CSFactory jT400CS)
         {
-            get { return true; }
+            _logger = logger;
+            _configManager = configManager;
+            _factory = jT400CS;
         }
 
-        public override Data DoProcess(ISunitpService _sunitpService, Data data)
+        public async Task<DataTransferObject> DoExecute(Data dataRequest, Guid requestId)
         {
-            var dataResponse = new Data();
-            dataResponse.Error = "0000000000000000000";
-            dataResponse.HasData = true;
-            dataResponse.Field = "RESPONSE";
-            dataResponse.ExternalError = "PROCESO REALIZADO CORRECTAMENTE";
-            dataResponse.InternalError = "";
-            dataResponse.DataList = new List<Data>();
+            _logger.LogInformation("StartConsult Request");
+            Stopwatch stopwatchGene = Stopwatch.StartNew();
 
-            if (!data.Field.Equals("REQUEST_DETAIL"))
+            // Conexión al AS400 vía JT400
+            _logger.LogInformation("StartConsult JT400CS");
+            Stopwatch stopwatchConexion = Stopwatch.StartNew();
+            using var jt400Connection = _factory.Create();
+            stopwatchConexion.Stop();
+            _logger.LogInformation("EndConsult JT400CS {ElapsedMs} ms", stopwatchConexion.Elapsed.TotalMilliseconds);
+
+            // Mapear campos de cabecera del request al CL
+            var cyb00027cl = dataRequest.MapFromRequest<CYB00027LC>();
+
+            // El request siempre trae un único nodo "Registros" con N "Registro" dentro.
+            // Estructura: Request → Registros → Registro[] → campos
+            var nodoRegistros = dataRequest.DataList
+                .FirstOrDefault(item => item.Field.Equals("Registros"));
+
+            if (nodoRegistros?.DataList == null || !nodoRegistros.DataList.Any())
             {
-                dataResponse.Error = "10000000000000000007";
-                dataResponse.ExternalError = "NO SE HAN ENCONTRADO LOS PARAMETROS NECESARIOS PARA EL REQUEST.";
-                return dataResponse;
+                return CrearResponseError(
+                    "10000000000000000005",
+                    "NO SE ENCONTRARON REGISTROS EN LA SOLICITUD",
+                    "El nodo Registros no contiene elementos.");
             }
 
-            //MapRequest
-            var cyb00027cl = new CYB00027CL();
-            var cyb00027clResponse = new CYB00027CLResponse();
-            var cyb00027clHeader = new CYB00027CLHeader();
-            var fQuery = new FieldsQuery();
-
-            var rom = new RequestObjectMapper();
-            rom.Map(cyb00027cl, data);
-            _sunitpService.AddObjLog("ConversionCompraVenta DoProcess", "00000000000000000000", "OBJETO ENVIADO", cyb00027cl.GetObject());
-
-
-            //crear encabezado de lista "Registros"
             var codMsgRespuesta = 0;
-            var lista = new Data();
-            lista.Field = "Registros";
-            lista.DataList = new List<Data>();
-
-
-            foreach (var item in data.DataList)
+            var lista = new Data
             {
-                if (item.Field.Equals("Registros"))
+                HasData = true,
+                Field = "Registros",
+                DataList = new List<Data>()
+            };
+
+            var cyb27clResponse = new CYB00027CLResponse();
+            var cyb27clheader = new CYB00027CLHeader();
+
+            foreach (var registro in nodoRegistros.DataList)
+            {
+                // Solo procesar nodos "Registro" — cualquier otro Data se ignora
+                if (!registro.Field.Equals("Registro"))
+                    continue;
+
+                // Sobreescribe los campos del CL con los valores de este registro
+                registro.MapFromRequestToInstance(cyb00027cl);
+
+                // Llamada al programa CL en el AS400
+                _logger.LogInformation("StartConsult CYB00027LC CL");
+                var stopwatchCL = Stopwatch.StartNew();
+                var result = await jt400Connection.CallProgramAsync(cyb00027cl);
+                stopwatchCL.Stop();
+                _logger.LogInformation("EndConsult CYB00027LC CL {ElapsedMs} ms", stopwatchCL.Elapsed.TotalMilliseconds);
+
+                // Si la llamada técnica falló, retornar error inmediato.
+                // No tiene sentido seguir procesando registros.
+                if (result == null)
                 {
-
-                    var i = 0;
-                    var registros = item;
-                    foreach (var registro in registros.DataList)
-                    {
-
-                        i += 1;
-                        if (registro.Field.Equals("Registro"))
-                        {
-                            var dataConversion = registro;
-
-                            var romList = new RequestObjectMapper();
-                            romList.Map(cyb00027cl, dataConversion);
-
-                        }
-
-
-                        //CallModel
-                        var edm = new EasyDataModels();
-                        edm.EasyCallInit(_oledbConnection, cyb00027cl);
-                        edm.CallProcedure();
-                        _sunitpService.AddObjLog("ConversionCompraVenta DoProcess", "00000000000000000000", "OBJETO RECIBIDO", cyb00027cl.GetObject());
-
-
-                        codMsgRespuesta = int.Parse(cyb00027cl.GetValue("codMsgRespuesta"));
-
-                        if (edm.IsSuccessful())
-                        {
-                            var numBank = fQuery.fieldQuery("CUXBK", "1");
-                            var numProduct = fQuery.fieldQuery("CUX1AC", cyb00027cl.GetValue("valNumeroProducto"));
-
-
-                            //setear valores de cyb00027cl a cyb00027clHeader y cyb00027clResponse
-                            foreach (var items in cyb00027cl.GetParameters())
-                            {
-                                var key = items.Key;
-                                var easy = items.Value;
-
-                                cyb00027clHeader.SetValue(key, easy.value);
-                                cyb00027clResponse.SetValue(key, easy.value);
-                            }
-
-
-                            cyb00027clHeader.SetValue("codMsgRespuesta", codMsgRespuesta.ToString());
-
-                            if (codMsgRespuesta == 0)
-                            {
-                                //Response Data Mapper
-                                var rdmResponse = new ResponseDataMapper(i.ToString(), "Registro", "", "", "", "");
-                                var response = rdmResponse.Map(cyb00027clResponse);
-
-                                //agregar lista a encabezado
-                                lista.HasData = true;
-                                lista.DataList.Add(response);
-                            }
-                            else
-                            {
-
-                                break;
-                            }
-
-                        }
-
-                        else
-                        {
-                            dataResponse.Error = "10000000000000000005";
-                            dataResponse.ExternalError = "ERROR AL MOMENTO DE LLAMAR AL PROCEDIMIENTO ALMACENADO.";
-                            dataResponse.InternalError = cyb00027cl.GetValue("_defaultError");
-                        }
-
-                    }
-
+                    return CrearResponseError(
+                        "10000000000000000005",
+                        "ERROR AL EJECUTAR LA SOLICITUD",
+                        "ERROR AL MOMENTO DE LLAMAR AL PROCEDIMIENTO ALMACENADO.");
                 }
+
+                // Mapear resultado del CL a los objetos de response y header
+                codMsgRespuesta = int.Parse(cyb00027cl.codMsgRespuesta);
+                cyb27clResponse = ServiceDataMapper.MapFromInstanceToInstance<CYB00027LC, CYB00027CLResponse>(cyb00027cl);
+                cyb27clheader = ServiceDataMapper.MapFromInstanceToInstance<CYB00027LC, CYB00027CLHeader>(cyb00027cl);
+                cyb27clheader.nombreOperacion = "";
+                cyb27clheader.codMsgRespuesta = codMsgRespuesta.ToString();
+
+                // Error de negocio → cortar procesamiento (atomicidad en respuesta)
+                if (codMsgRespuesta != 0)
+                    break;
+
+                // Registro exitoso → acumular en la lista de respuesta
+                var camposRegistro = ServiceDataMapper.MapToResponse(cyb27clResponse).Data.DataList;
+
+                lista.DataList.Add(new Data
+                {
+                    Field = "Registro",
+                    HasData = true,
+                    DataList = camposRegistro,
+                    Value = ""
+                });
             }
 
-            var rdm = new ResponseDataMapper("", "RESPONSE", "", "00000000000000000000", "PROCESO REALIZADO EXITOSAMENTE", "");
-            dataResponse = rdm.Map(cyb00027clHeader);
+            // Construir respuesta final desde el header del último registro procesado
+            var responseData = ServiceDataMapper.MapToResponse(cyb27clheader);
+            responseData.Error = "00000000000000000000";
+            responseData.ExternalError = "PROCESO REALIZADO CORRECTAMENTE";
+            responseData.InternalError = "";
+            responseData.Bank = _configManager.GetString("bank");
+            responseData.ExecuteMethod = _configManager.GetString("serviceMethod");
 
+            // Solo incluir registros si todos procesaron exitosamente
             if (codMsgRespuesta == 0)
             {
-                dataResponse.DataList.Add(lista);
+                responseData.Data.DataList.Add(lista);
             }
 
-            _sunitpService.AddObjLog("ConversionCompraVenta DoProcess", "00000000000000000000", "OBJETO ENVIADO", cyb00027cl.GetObject());
-            return dataResponse;
+            stopwatchGene.Stop();
+            _logger.LogInformation("EndConsult Request {ElapsedMs} ms", stopwatchGene.Elapsed.TotalMilliseconds);
+            return responseData;
+        }
 
+        /// <summary>
+        /// Construye un DataTransferObject de error con estructura uniforme.
+        /// Centraliza la creación para evitar inconsistencias entre puntos de fallo.
+        /// </summary>
+        private DataTransferObject CrearResponseError(string error, string externalError, string internalError)
+        {
+            return new DataTransferObject
+            {
+                Error = error,
+                ExternalError = externalError,
+                InternalError = internalError,
+                Bank = _configManager.GetString("bank"),
+                ExecuteMethod = _configManager.GetString("serviceMethod"),
+                Data = new Data
+                {
+                    DataList = new List<Data>(),
+                    Field = "RESPONSE"
+                }
+            };
+        }
+
+        // TODO: mover a UtilesAndHelpers — ya existe DecodeBase64Safe en otros servicios
+        public string DecodeBase64(string value)
+        {
+            byte[] bytes = Convert.FromBase64String(value);
+            return Encoding.UTF8.GetString(bytes);
         }
     }
 }
