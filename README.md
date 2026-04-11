@@ -82,7 +82,7 @@ GET /api/templates/odbc      # Template con dependencias AS400/ODBC
 
 ---
 
-## Modulo Deploy — Despliegue de containers
+## Modulo Deploy — Despliegue de containers en linux
 
 Pipeline asincrono: docker login → docker pull → (stop + rm si existe) → docker run → verificar → Running.
 
